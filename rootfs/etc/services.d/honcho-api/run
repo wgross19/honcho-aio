@@ -17,4 +17,10 @@ cd /opt/honcho
 gosu honcho env HOME=/var/lib/honcho \
   /opt/honcho/.venv/bin/python /opt/honcho/scripts/provision_db.py
 
+# Reconcile pgvector column dimensions with EMBEDDING_VECTOR_DIMENSIONS
+# Alembic creates default vector(1536); configure_embeddings.py ALTERs to
+# match the configured value. Idempotent — no-op when dims already match.
+gosu honcho env HOME=/var/lib/honcho \
+  /opt/honcho/.venv/bin/python /opt/honcho/scripts/configure_embeddings.py --yes
+
 exec gosu honcho env HOME=/var/lib/honcho /usr/local/bin/honcho-api
