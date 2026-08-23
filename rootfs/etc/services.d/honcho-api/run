@@ -7,6 +7,7 @@ set -euo pipefail
 
 load_runtime
 wait_postgres
+wait_redis
 ensure_postgres
 
 # Provision the schema (Alembic migrations) before serving, matching upstream.

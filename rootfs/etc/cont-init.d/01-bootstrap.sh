@@ -1,32 +1,34 @@
 #!/command/with-contenv bash
 # shellcheck shell=bash
+# shellcheck disable=SC2312 # intentional: log() masks return
 set -euo pipefail
 
-mkdir -p /config/honcho
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 
-ENV_FILE="/config/honcho/generated.env"
-touch "${ENV_FILE}"
-chown root:users /config/honcho "${ENV_FILE}"
-chmod 750 /config/honcho
-chmod 640 "${ENV_FILE}"
+install -d -m 0755 /var/lib/honcho /data/postgres /data/redis /run/postgresql
+chown -R honcho:users /var/lib/honcho
+chown -R postgres:postgres /data/postgres /run/postgresql
+chown -R redis:redis /data/redis
 
-persist_if_missing() {
-	local key="$1"
-	local value="$2"
-	if grep -q "^${key}=" "${ENV_FILE}"; then
-		return
-	fi
-	printf '%s="%s"\n' "${key}" "${value}" >>"${ENV_FILE}"
-}
+# Require POSTGRES_PASSWORD — operator must provide it via env or secrets.
+if [[ -z ${POSTGRES_PASSWORD-} ]]; then
+	log "error: POSTGRES_PASSWORD is required (set via environment or Docker secrets)"
+	exit 64
+fi
 
-# Honcho runtime wiring: the single image hosts Honcho, PostgreSQL and Redis.
-# Default DB/CACHE point at the local services; operators override via env or
-# /config/honcho/generated.env.
-persist_if_missing "DB_CONNECTION_URI" "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/honcho"
-persist_if_missing "CACHE_URL" "redis://127.0.0.1:6379/0?suppress=true"
-persist_if_missing "CACHE_ENABLED" "true"
+POSTGRES_USER="${POSTGRES_USER:-postgres}"
+POSTGRES_DB="${POSTGRES_DB:-honcho}"
 
-# Random secret used for JWT signing if auth is enabled.
-persist_if_missing "AUTH_JWT_SECRET" "$(python3 -c 'import secrets; print(secrets.token_hex(64))')"
+# Generate a random JWT signing secret on first boot.
+AUTH_JWT_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(64))')"
 
-echo "[honcho-aio] first-run values stored at ${ENV_FILE}."
+umask 077
+cat >/var/lib/honcho/runtime.env <<EOF
+DB_CONNECTION_URI=postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
+CACHE_URL=redis://127.0.0.1:6379/0?suppress=true
+CACHE_ENABLED=true
+AUTH_JWT_SECRET=${AUTH_JWT_SECRET}
+EOF
+chown honcho:users /var/lib/honcho/runtime.env
+chmod 600 /var/lib/honcho/runtime.env
+log "runtime env written to /var/lib/honcho/runtime.env"
