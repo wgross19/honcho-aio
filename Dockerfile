@@ -1,39 +1,94 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 # checkov:skip=CKV_DOCKER_3: s6-overlay requires root init so cont-init scripts can prepare state before services drop privileges
-# checkov:skip=CKV_DOCKER_8: s6-overlay entrypoint must start as root so init scripts can prepare filesystem state before dropping privileges
+# checkov:skip=CKV_DOCKER_8: s6-overlay entrypoint must start as root so init scripts can prepare the filesystem state before dropping privileges
 
-FROM wgross19/aio-base:s6-3.2.1.0@sha256:07db479a01a95ba28480b4605f5d1cc8bedb574b77cf167ee46e29b9558fee90 AS aio-base
+ARG DEBIAN_IMAGE=debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.9.24@sha256:816fdce3387ed2142e37d2e56e1b1b97ccc1ea87731ba199dc8a25c04e4997c5
 
-# Replace this starter runtime with the real upstream image once the derived repo is wired.
-FROM python:3.14-slim-bookworm@sha256:2e256d0381371566ed96980584957ed31297f437569b79b0e5f7e17f2720e53a
+# checkov:skip=CKV_DOCKER_8:s6 is PID 1 and must start as root; it drops privileges to honcho (99:100) for runtime services
+FROM ${UV_IMAGE} AS uv
 
-# hadolint ignore=DL3002
+#checkov:skip=CKV_DOCKER_7:base images are digest-pinned, not 'latest'
+FROM ${DEBIAN_IMAGE}
+
+# Upstream Honcho pinned release. The fleet monitor drives the release tag via
+# the HONCHO_VERSION ARG (version_key). The build itself stays pinned to
+# HONCHO_GIT_SHA; HONCHO_VERSION is the discoverable release label only.
+ARG HONCHO_VERSION=v3.0.12
+ARG HONCHO_GIT_SHA=8fcbb54a49292341dba79d606ee332c50778429b
+ARG HONCHO_REPO=https://github.com/plastic-labs/honcho.git
+ARG S6_OVERLAY_VERSION=3.2.1.0
+ARG POSTGRES_MAJOR=17
+ARG HONCHO_USER=honcho
+ARG HONCHO_UID=99
+
+LABEL org.opencontainers.image.title="honcho-aio" \
+      org.opencontainers.image.source="${HONCHO_REPO}" \
+      org.opencontainers.image.revision="${HONCHO_GIT_SHA}" \
+      org.opencontainers.image.version="${HONCHO_VERSION}" \
+      com.honcho-aio.service="honcho"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    HONCHO_HOME=/var/lib/honcho \
+    PATH="/opt/honcho/.venv/bin:/usr/lib/postgresql/${POSTGRES_MAJOR}/bin:/usr/local/bin:${PATH}" \
+    S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=300000 \
+    S6_KEEP_ENV=1
+
 USER root
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    gnupg \
+    openssl \
+    xz-utils \
+    gosu \
+    python3 \
+    redis-server \
+  && install -d -m 0755 /etc/apt/keyrings \
+  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg \
+  && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    postgresql-${POSTGRES_MAJOR} \
+    postgresql-${POSTGRES_MAJOR}-pgvector \
+    postgresql-client-${POSTGRES_MAJOR} \
+  && curl -fsSL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" -o /tmp/s6-noarch.tar.xz \
+  && curl -fsSL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz" -o /tmp/s6-arch.tar.xz \
+  && tar -C / -Jxpf /tmp/s6-noarch.tar.xz \
+  && tar -C / -Jxpf /tmp/s6-arch.tar.xz \
+  && rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz \
+  && useradd --system --uid ${HONCHO_UID} --gid users --home-dir /var/lib/honcho --create-home honcho \
+  && mkdir -p /opt/honcho /var/lib/honcho /data/postgres /data/redis /run/postgresql \
+  && chown -R honcho:users /opt/honcho /var/lib/honcho \
+  && chown -R postgres:postgres /data/postgres /run/postgresql \
+  && chown -R redis:redis /data/redis \
+  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=aio-base /aio-overlay/ /
+# Copy uv from the pinned uv image into a builder layer.
+COPY --from=uv /uv /usr/local/bin/uv
 
-RUN aio-harden pre && \
-    groupadd --system appuser && \
-    useradd --system --gid appuser --create-home --home-dir /home/appuser --shell /usr/sbin/nologin appuser && \
-    mkdir -p /config /data /run/service-app && \
-    chown -R appuser:appuser /run/service-app && \
-    aio-harden post
+WORKDIR /opt/honcho
+RUN git clone --filter=blob:none "${HONCHO_REPO}" /tmp/honcho-src \
+  && git -C /tmp/honcho-src checkout --detach "${HONCHO_GIT_SHA}" \
+  && test "$(git -C /tmp/honcho-src rev-parse HEAD)" = "${HONCHO_GIT_SHA}" \
+  && cp -a /tmp/honcho-src/. /opt/honcho/ \
+  && rm -rf /tmp/honcho-src \
+  && uv sync --frozen --no-install-project --no-group dev \
+  && chown -R honcho:users /opt/honcho \
+  && printf '%s\n' '#!/bin/sh' \
+       'exec /opt/honcho/.venv/bin/fastapi run --host 0.0.0.0 --port 8000 /opt/honcho/src/main.py' \
+     > /usr/local/bin/honcho-api \
+  && chmod 755 /usr/local/bin/honcho-api
 
 COPY rootfs/ /
+RUN chmod 755 /etc/cont-init.d/* /etc/services.d/*/run /usr/local/bin/*
 
-RUN find /etc/cont-init.d -type f -exec chmod +x {} \; && \
-    find /etc/services.d -type f -name run -exec chmod +x {} \; && \
-    find /usr/local/bin -type f -name '*.py' -exec chmod +x {} \;
-
-VOLUME ["/config", "/data"]
-
-EXPOSE 8080
-
-ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME=300000
-ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5).read()" || exit 1
+EXPOSE 8000
+VOLUME ["/data/postgres", "/data/redis", "/var/lib/honcho"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=10 \
+  CMD curl -fsS http://127.0.0.1:8000/health || exit 1
 
 ENTRYPOINT ["/init"]
