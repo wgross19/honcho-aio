@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 - Fix s6 services + cont-init bootstrap to match spec
 
-- Provider abstraction — <provider>/<model> parsing + dimension guard
+- Provider abstraction — `<provider>/<model>` parsing + dimension guard
 
 - Unraid XML template (honcho-aio.xml)
 
