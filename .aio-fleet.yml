@@ -13,7 +13,7 @@ release:
   previous_tag_command: latest-aio-tag
 upstream:
   name: Honcho
-  version_key: UPSTREAM_VERSION
+  version_key: HONCHO_VERSION
   digest_arg: UPSTREAM_IMAGE_DIGEST
   monitor:
     - component: honcho
