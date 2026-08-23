@@ -1,0 +1,146 @@
+#!/opt/honcho/.venv/bin/python
+"""Probe the configured embedding model and validate vector dimensions.
+
+Called from 01-bootstrap.sh after runtime.env is written. Reads env from
+/var/lib/honcho/runtime.env, sends a minimal embedding request to the
+configured provider, and compares the returned dimension against
+EMBEDDING_VECTOR_DIMENSIONS.
+
+Exit codes:
+    0  dimension verified
+    1  dimension mismatch (clear error on stderr)
+    2  connection / auth failure (probe skipped — runtime check covers it)
+    3  misconfiguration (missing env vars, unknown transport)
+"""
+
+import os
+import sys
+
+# ── Load runtime.env ──────────────────────────────────────────────────────
+RUNTIME_ENV = "/var/lib/honcho/runtime.env"
+if os.path.isfile(RUNTIME_ENV):
+    with open(RUNTIME_ENV) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k, v)
+
+
+def log(msg: str) -> None:
+    print(msg, file=sys.stderr)
+
+
+# ── Read config ───────────────────────────────────────────────────────────
+transport = os.environ.get("EMBEDDING_MODEL_CONFIG__transport", "")
+model = os.environ.get("EMBEDDING_MODEL_CONFIG__model", "")
+overrides_base_url = os.environ.get(
+    "EMBEDDING_MODEL_CONFIG__overrides__base_url", ""
+) or None
+api_key_env = os.environ.get(
+    "EMBEDDING_MODEL_CONFIG__overrides__api_key_env", ""
+) or None
+
+try:
+    expected_dims = int(os.environ.get("EMBEDDING_VECTOR_DIMENSIONS", ""))
+except (ValueError, TypeError):
+    log(f"error: EMBEDDING_VECTOR_DIMENSIONS not set or invalid")
+    sys.exit(3)
+
+if not model:
+    log("error: EMBEDDING_MODEL_CONFIG__model not set")
+    sys.exit(3)
+
+if not transport:
+    log("error: EMBEDDING_MODEL_CONFIG__transport not set")
+    sys.exit(3)
+
+# ── Resolve API key ───────────────────────────────────────────────────────
+api_key = None
+if api_key_env:
+    api_key = os.environ.get(api_key_env)
+
+# Fall back to default LLM env vars for the matching transport.
+if not api_key:
+    if transport == "openai":
+        api_key = os.environ.get("LLM_OPENAI_API_KEY")
+    elif transport == "gemini":
+        api_key = os.environ.get("LLM_GEMINI_API_KEY")
+
+
+# ── Probe ─────────────────────────────────────────────────────────────────
+def probe_openai(url: str | None, key: str | None) -> int | None:
+    """Probe with OpenAI-compatible client.  Returns actual dimension or None."""
+    from openai import OpenAI
+
+    try:
+        client = OpenAI(api_key=key or "", base_url=url)
+        kwargs: dict = {"model": model, "input": ["t"]}
+        kwargs["dimensions"] = expected_dims
+        resp = client.embeddings.create(**kwargs)
+        return len(resp.data[0].embedding)
+    except Exception as exc:
+        err_str = str(exc).lower()
+        if "cred" in err_str or "api key" in err_str or "unauthorized" in err_str or "auth" in err_str:
+            log(f"warning: embedding probe skipped — auth failure: {exc}")
+            return None
+        if "connect" in err_str or "connection" in err_str or "refused" in err_str:
+            log(f"warning: embedding probe skipped — unreachable: {exc}")
+            return None
+        log(f"error: embedding probe failed: {exc}")
+        return None
+
+
+def probe_gemini(key: str | None) -> int | None:
+    """Probe Gemini embedding.  Returns actual dimension or None."""
+    from google import genai
+    from google.genai import types as genai_types
+
+    try:
+        http_options = (
+            genai_types.HttpOptions(base_url=overrides_base_url)
+            if overrides_base_url
+            else None
+        )
+        client = genai.Client(api_key=key or "", http_options=http_options)
+        resp = client.models.embed_content(
+            model=model,
+            contents="t",
+            config={"output_dimensionality": expected_dims},
+        )
+        if not resp.embeddings or not resp.embeddings[0].values:
+            log("error: no embedding returned by Gemini API")
+            return None
+        return len(resp.embeddings[0].values)
+    except Exception as exc:
+        err_str = str(exc).lower()
+        if "api key" in err_str or "auth" in err_str:
+            log(f"warning: embedding probe skipped — auth failure: {exc}")
+            return None
+        if "connect" in err_str or "connection" in err_str or "refused" in err_str:
+            log(f"warning: embedding probe skipped — unreachable: {exc}")
+            return None
+        log(f"error: Gemini embedding probe failed: {exc}")
+        return None
+
+
+if transport == "gemini":
+    actual = probe_gemini(api_key)
+else:
+    actual = probe_openai(overrides_base_url, api_key)
+
+if actual is None:
+    log("warning: embedding probe could not verify dimension — runtime check will catch mismatches")
+    sys.exit(2)
+
+if actual == expected_dims:
+    sys.exit(0)
+
+log(
+    f"error: embedding dimension mismatch — "
+    f"model '{transport}/{model}' outputs {actual}d, "
+    f"but EMBEDDING_VECTOR_DIMENSIONS={expected_dims}. "
+    f"Set EMBEDDING_VECTOR_DIMENSIONS={actual} to match, or switch to a model "
+    f"that produces {expected_dims}-dimensional vectors."
+)
+sys.exit(1)
