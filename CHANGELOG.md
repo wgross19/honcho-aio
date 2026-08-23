@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## v3.0.12-aio.1 - 2026-08-23
+
+### Other Changes
+
+- Complete honcho-aio Dockerfile with s6-overlay, PG17+pgvector, Redis, Honcho v3.0.12 compile
+
+- Fix s6 services + cont-init bootstrap to match spec
+
+- Provider abstraction — <provider>/<model> parsing + dimension guard
+
+- Unraid XML template (honcho-aio.xml)
+
+- Rewrite honcho-aio.xml to Unraid CA Config attribute shape
+
+- Track generated .aio-fleet.yml fleet contract
+
+- Validate + pytest (10 unit, 9 integration) + trunk green
+
+- Reconcile pgvector dims with EMBEDDING_VECTOR_DIMENSIONS at api start
+
+- Catalog-ready XML and published fleet contract
+
+- Set fleet upstream version_key to HONCHO_VERSION
+
 ## v0.1.3 - 2026-06-18
 
 ### Build
