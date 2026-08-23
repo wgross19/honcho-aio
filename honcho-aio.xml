@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  honcho-aio — Community Applications (CA) template for Unraid
+  ==============================================================
+  This template advertises the all-in-one Honcho memory engine image
+  with built-in PostgreSQL 17 + pgvector, Redis, and s6-overlay supervision.
+
+  DESIGN NOTES
+  ─────────────
+  • POSTGRES_PASSWORD is REQUIRED and masked — the container refuses to boot
+    without it (exit 64).
+  • EMBEDDING_MODEL and CHAT_MODEL use the <provider>/<model> syntax where
+    <provider> is one of: local, ollama, openai, openrouter, together,
+    anthropic (chat only), gemini.
+  • Per-provider API-key env vars are always visible (masked) so the user
+    can fill in whichever key applies without switching to Advanced view.
+  • Advanced toggles (auth, metrics, telemetry, Sentry, webhook, deriver
+    workers, log level, namespace) live under the "Advanced" display slot.
+  • LAN-bind: the container itself serves on 0.0.0.0:8000; the bridge port
+    mapping gives the Unraid host reachable access at the mapped HostPort.
+
+  STOP GATE — Do NOT set catalog_published: true anywhere in this file.
+-->
+<Container version="2">
+  <Name>honcho-aio</Name>
+  <Description>
+    Honcho — a memory layer for AI agents. Runs PostgreSQL 17+pgvector, Redis,
+    and the Honcho API server (FastAPI) under s6-overlay supervision.
+  </Description>
+  <Overview>
+    &lt;h2&gt;Honcho — Persistent Memory for AI Agents&lt;/h2&gt;
+    &lt;p&gt;
+      Honcho is an open-source memory engine that gives AI agents structured,
+      persistent memory over multiple sessions. This all-in-one image bundles
+      everything you need:
+    &lt;/p&gt;
+    &lt;ul&gt;
+      &lt;li&gt;&lt;b&gt;PostgreSQL 17&lt;/b&gt; with the &lt;code&gt;pgvector&lt;/code&gt; extension for
+        embedding storage and similarity search.&lt;/li&gt;
+      &lt;li&gt;&lt;b&gt;Redis&lt;/b&gt; for caching (reduces embedding re-computation).&lt;/li&gt;
+      &lt;li&gt;&lt;b&gt;Honcho API server&lt;/b&gt; (FastAPI on port 8000) serving the REST
+        and WebSocket endpoints.&lt;/li&gt;
+      &lt;li&gt;&lt;b&gt;s6-overlay&lt;/b&gt; supervision — Postgres, Redis, and Honcho each
+        run as unprivileged services.&lt;/li&gt;
+    &lt;/ul&gt;
+
+    &lt;h3&gt;Provider &amp; Model Setup&lt;/h3&gt;
+    &lt;p&gt;
+      &lt;b&gt;&lt;code&gt;EMBEDDING_MODEL&lt;/code&gt;&lt;/b&gt; and &lt;b&gt;&lt;code&gt;CHAT_MODEL&lt;/code&gt;&lt;/b&gt;
+      use the &lt;code&gt;&amp;lt;provider&amp;gt;/&amp;lt;model&amp;gt;&lt;/code&gt; format. The split is on
+      the &lt;b&gt;first&lt;/b&gt; &lt;code&gt;/&lt;/code&gt;; the model portion may contain nested slashes
+      (e.g. &lt;code&gt;openrouter/openai/gpt-5.4-mini&lt;/code&gt; → provider =
+      &lt;code&gt;openrouter&lt;/code&gt;, model = &lt;code&gt;openai/gpt-5.4-mini&lt;/code&gt;).
+    &lt;/p&gt;
+
+    &lt;table&gt;
+      &lt;tr&gt;&lt;th&gt;Provider&lt;/th&gt;&lt;th&gt;Transport&lt;/th&gt;&lt;th&gt;API Key&lt;/th&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;&lt;code&gt;local&lt;/code&gt;&lt;/td&gt;&lt;td&gt;OpenAI-compat&lt;/td&gt;&lt;td&gt;&lt;code&gt;LOCAL_API_KEY&lt;/code&gt; (opt.)&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;&lt;code&gt;ollama&lt;/code&gt;&lt;/td&gt;&lt;td&gt;OpenAI-compat&lt;/td&gt;&lt;td&gt;&lt;code&gt;OLLAMA_API_KEY&lt;/code&gt; (default &amp;#39;ollama&amp;#39;)&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;&lt;code&gt;openai&lt;/code&gt;&lt;/td&gt;&lt;td&gt;OpenAI&lt;/td&gt;&lt;td&gt;&lt;code&gt;LLM_OPENAI_API_KEY&lt;/code&gt;&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;&lt;code&gt;openrouter&lt;/code&gt;&lt;/td&gt;&lt;td&gt;OpenAI-compat&lt;/td&gt;&lt;td&gt;&lt;code&gt;LLM_OPENAI_API_KEY&lt;/code&gt;&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;&lt;code&gt;together&lt;/code&gt;&lt;/td&gt;&lt;td&gt;OpenAI-compat&lt;/td&gt;&lt;td&gt;&lt;code&gt;LLM_OPENAI_API_KEY&lt;/code&gt;&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;&lt;code&gt;anthropic&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Anthropic&lt;/td&gt;&lt;td&gt;&lt;code&gt;LLM_ANTHROPIC_API_KEY&lt;/code&gt;&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr&gt;&lt;td&gt;&lt;code&gt;gemini&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Gemini&lt;/td&gt;&lt;td&gt;&lt;code&gt;LLM_GEMINI_API_KEY&lt;/code&gt;&lt;/td&gt;&lt;/tr&gt;
+    &lt;/table&gt;
+
+    &lt;h3&gt;Hermes AI Native Integration&lt;/h3&gt;
+    &lt;p&gt;
+      &lt;a href=&quot;https://hermes-agent.nousresearch.com&quot;&gt;Hermes AI&lt;/a&gt; can use
+      Honcho as its memory backend natively. After the container is running:
+    &lt;/p&gt;
+    &lt;pre&gt;hermes memory setup&lt;/pre&gt;
+    &lt;p&gt;
+      Point Hermes at &lt;code&gt;http://&amp;lt;unraid-lan-ip&amp;gt;:8000&lt;/code&gt;. No additional
+      proxy or tunnel required within the LAN.
+    &lt;/p&gt;
+
+    &lt;h3&gt;Important Notes&lt;/h3&gt;
+    &lt;ul&gt;
+      &lt;li&gt;PostgreSQL and Redis are &lt;b&gt;internal only&lt;/b&gt; — they listen on
+        127.0.0.1 inside the container and are not exposed to the host.&lt;/li&gt;
+      &lt;li&gt;The &lt;b&gt;chat &amp;amp; deriver model must support tool/function calling&lt;/b&gt;.
+        Non-tool-calling completion models will break agent loops.&lt;/li&gt;
+      &lt;li&gt;&lt;code&gt;local/&lt;/code&gt; chat uses &lt;b&gt;no cloud fallback&lt;/b&gt; — all traffic is
+        routed exclusively to the local endpoint at &lt;code&gt;LOCAL_BASE_URL&lt;/code&gt;.&lt;/li&gt;
+      &lt;li&gt;At boot, the container probes the embedding model&amp;#39;s output dimension.
+        If the dimension does not match &lt;code&gt;EMBEDDING_VECTOR_DIMENSIONS&lt;/code&gt;
+        (default 768) the boot fails with a clear error.&lt;/li&gt;
+    &lt;/ul&gt;
+  </Overview>
+  <Repository>dub19/honcho-aio</Repository>
+  <Registry>https://hub.docker.com/r/dub19/honcho-aio</Registry>
+  <Support>https://github.com/dub19/honcho-aio/issues</Support>
+  <Category>AI:LLM</Category>
+  <Project>https://github.com/dub19/honcho-aio</Project>
+  <Icon>https://raw.githubusercontent.com/dub19/honcho-aio/main/docs/icon.png</Icon>
+  <DonateText>Sponsor Honcho</DonateText>
+  <DonateLink>https://github.com/sponsors/plastic-labs</DonateLink>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>8000</HostPort>
+        <ContainerPort>8000</ContainerPort>
+        <Protocol>tcp</Protocol>
+        <Description>Honcho API / Web UI</Description>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/honcho-aio/postgres</HostDir>
+      <ContainerDir>/data/postgres</ContainerDir>
+      <Mode>rw</Mode>
+      <Description>PostgreSQL 17 data directory (internal-only, not exposed to host network)</Description>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/appdata/honcho-aio/redis</HostDir>
+      <ContainerDir>/data/redis</ContainerDir>
+      <Mode>rw</Mode>
+      <Description>Redis cache data directory (internal-only)</Description>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/appdata/honcho-aio/honcho</HostDir>
+      <ContainerDir>/var/lib/honcho</ContainerDir>
+      <Mode>rw</Mode>
+      <Description>Honcho runtime state (config, logs, generated secrets)</Description>
+    </Volume>
+  </Data>
+  <Config>
+    <!-- ██ ESSENTIAL — always visible ██ -->
+    <Category>
+      <Name>Essential Configuration</Name>
+      <Description>Required connection secrets and model selection. These fields are always shown.</Description>
+      <Config>
+        <Name>PostgreSQL Password</Name>
+        <Target>POSTGRES_PASSWORD</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          Master password for the internal PostgreSQL database. Required — the
+          container will exit with an error on first boot if this is empty.
+          Generate a strong password (e.g. 32 hex chars). Stored as an
+          s6-service secret; never logged or exposed on the process line.
+        </Description>
+        <Required>true</Required>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>PostgreSQL User</Name>
+        <Target>POSTGRES_USER</Target>
+        <Default>postgres</Default>
+        <Mode>r</Mode>
+        <Description>PostgreSQL superuser name. Defaults to &amp;quot;postgres&amp;quot;.</Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>PostgreSQL Database</Name>
+        <Target>POSTGRES_DB</Target>
+        <Default>honcho</Default>
+        <Mode>r</Mode>
+        <Description>Honcho database name within PostgreSQL. Defaults to &amp;quot;honcho&amp;quot;.</Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Embedding Model</Name>
+        <Target>EMBEDDING_MODEL</Target>
+        <Default>local/embeddinggemma</Default>
+        <Mode>r</Mode>
+        <Description>
+          Embedding model in &amp;lt;provider&amp;gt;/&amp;lt;model&amp;gt; format.
+          Example: local/embeddinggemma, openai/text-embedding-3-small,
+          ollama/nomic-embed-text.
+          Supported embedding providers: local, ollama, openai, openrouter,
+          together, gemini.
+        </Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Chat Model</Name>
+        <Target>CHAT_MODEL</Target>
+        <Default>openai/gpt-5.4-mini</Default>
+        <Mode>r</Mode>
+        <Description>
+          Chat/completion model in &amp;lt;provider&amp;gt;/&amp;lt;model&amp;gt; format.
+          The model portion retains nested slashes, e.g.
+          openrouter/openai/gpt-5.4-mini (provider=openrouter,
+          model=openai/gpt-5.4-mini).
+          Must support tool/function calling for agent loops.
+          Supported providers: local, ollama, openai, openrouter, together,
+          anthropic, gemini.
+        </Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Local Provider Base URL</Name>
+        <Target>LOCAL_BASE_URL</Target>
+        <Default></Default>
+        <Mode>r</Mode>
+        <Description>
+          Base URL for the &amp;quot;local/&amp;quot; provider (both embedding and chat).
+          Required when EMBEDDING_MODEL or CHAT_MODEL uses the local provider.
+          Example: http://192.168.1.100:1234/v1 (for LM Studio / LocalAI).
+          When local/ is used for chat there is NO cloud fallback — all
+          traffic is routed exclusively to this endpoint.
+        </Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Embedding Vector Dimensions</Name>
+        <Target>EMBEDDING_VECTOR_DIMENSIONS</Target>
+        <Default>768</Default>
+        <Mode>r</Mode>
+        <Description>
+          Expected output dimension of the embedding model. At boot the container
+          probes the model&amp;#39;s actual dimension; if it does not match this value
+          the boot fails with a clear error. Adjust to match your model
+          (e.g. 1536 for text-embedding-3-small, 1024 for nomic-embed-text-v1.5).
+        </Description>
+        <Display>always</Display>
+      </Config>
+    </Category>
+
+    <!-- ██ PROVIDER API KEYS — always visible, masked ██ -->
+    <Category>
+      <Name>Provider API Keys</Name>
+      <Description>
+        API keys for each supported LLM provider. All fields are masked at input.
+        Fill in only the keys for the providers you use (the runtime.env
+        generator reads the relevant key automatically based on your model
+        selection). These are always visible on the main config page for
+        convenience.
+      </Description>
+      <Config>
+        <Name>OpenAI API Key (also used by OpenRouter &amp; Together)</Name>
+        <Target>LLM_OPENAI_API_KEY</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          OpenAI API key. Also used as the credential for OpenRouter and Together
+          (those providers forward the key to their upstream). Required when
+          EMBEDDING_MODEL or CHAT_MODEL uses openai, openrouter, or together.
+        </Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Anthropic API Key</Name>
+        <Target>LLM_ANTHROPIC_API_KEY</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          Anthropic API key for Claude models. Required when CHAT_MODEL uses the
+          anthropic provider. Not used for embeddings (anthropic is chat-only).
+        </Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Gemini API Key</Name>
+        <Target>LLM_GEMINI_API_KEY</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          Google Gemini API key. Required when EMBEDDING_MODEL or CHAT_MODEL uses
+          the gemini provider.
+        </Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Ollama API Key</Name>
+        <Target>OLLAMA_API_KEY</Target>
+        <Default>ollama</Default>
+        <Mode>s</Mode>
+        <Description>
+          Ollama API key. Defaults to &amp;quot;ollama&amp;quot; (what Ollama expects by
+          default). Override if your Ollama instance requires a custom key.
+          Required when EMBEDDING_MODEL or CHAT_MODEL uses the ollama provider.
+        </Description>
+        <Display>always</Display>
+      </Config>
+      <Config>
+        <Name>Local Provider API Key</Name>
+        <Target>LOCAL_API_KEY</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          Optional API key for the &amp;quot;local/&amp;quot; provider. Only needed if your
+          local OpenAI-compatible endpoint (LM Studio, LocalAI, vLLM) requires
+          authentication. Leave blank if the local endpoint is unauthenticated.
+        </Description>
+        <Display>always</Display>
+      </Config>
+    </Category>
+
+    <!-- ██ ADVANCED OPTIONS — hidden by default ██ -->
+    <Category>
+      <Name>Advanced Options</Name>
+      <Description>
+        Optional features and tunables: authentication, monitoring, telemetry,
+        Sentry error tracking, webhook secret, deriver concurrency, log verbosity,
+        and namespace isolation. These settings are only shown when toggling the
+        &amp;quot;Advanced View&amp;quot; switch on the template page.
+      </Description>
+      <Config>
+        <Name>Enable Authentication</Name>
+        <Target>AUTH_USE_AUTH</Target>
+        <Default>false</Default>
+        <Mode>r</Mode>
+        <Description>
+          Set to &amp;quot;true&amp;quot; to enable JWT-based authentication on the Honcho API.
+          When enabled the container generates a random JWT signing secret on
+          first boot. You may also specify a static secret via AUTH_JWT_SECRET.
+          Defers to AUTH_JWT_SECRET when both are set.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>JWT Secret (override)</Name>
+        <Target>AUTH_JWT_SECRET</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          Static JWT signing secret. When set, the container uses this value
+          instead of auto-generating a random one on first boot. Useful when
+          you need deterministic secrets across restarts or replicas. If left
+          blank the container generates a random 64-byte hex token automatically.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>Enable Metrics</Name>
+        <Target>METRICS_ENABLED</Target>
+        <Default>false</Default>
+        <Mode>r</Mode>
+        <Description>
+          Set to &amp;quot;true&amp;quot; to expose Prometheus-compatible metrics at
+          /metrics on the Honcho API port. Useful for scraping into a monitoring
+          stack (Grafana, Prometheus, VictoriaMetrics).
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>Enable Telemetry</Name>
+        <Target>TELEMETRY_ENABLED</Target>
+        <Default>false</Default>
+        <Mode>r</Mode>
+        <Description>
+          Set to &amp;quot;true&amp;quot; to enable anonymous usage telemetry. Data helps the
+          upstream Honcho team understand deployment patterns and improve the
+          product. No PII is collected.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>Enable Sentry</Name>
+        <Target>SENTRY_ENABLED</Target>
+        <Default>false</Default>
+        <Mode>r</Mode>
+        <Description>
+          Set to &amp;quot;true&amp;quot; to enable Sentry error tracking. Requires a valid
+          SENTRY_DSN (data source name). Errors are reported to your Sentry
+          project for debugging.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>Sentry DSN</Name>
+        <Target>SENTRY_DSN</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          Sentry Data Source Name (https://&amp;lt;key&amp;gt;@&amp;lt;org&amp;gt;.ingest.sentry.io/&amp;lt;project&amp;gt;).
+          Required when SENTRY_ENABLED=true. Leave blank if Sentry is disabled.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>Webhook Secret</Name>
+        <Target>WEBHOOK_SECRET</Target>
+        <Default></Default>
+        <Mode>s</Mode>
+        <Description>
+          Shared secret for Honcho webhook endpoints. When set, Honcho signs
+          webhook payloads with this secret so receivers can verify authenticity.
+          Generate a random string and share it with your webhook consumer.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>Deriver Worker Count</Name>
+        <Target>DERIVER_WORKERS</Target>
+        <Default>4</Default>
+        <Mode>r</Mode>
+        <Description>
+          Number of concurrent worker processes for the Honcho deriver (memory
+          derivation and summarization). Increase on multi-core hosts; decrease
+          on constrained hardware. Default: 4.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>LLM Log Level</Name>
+        <Target>LLM_LOG_LEVEL</Target>
+        <Default>WARNING</Default>
+        <Mode>r</Mode>
+        <Description>
+          Log verbosity for LLM and embedding calls. One of: DEBUG, INFO,
+          WARNING, ERROR, CRITICAL. DEBUG logs every API round-trip including
+          prompts and responses (noisy but useful for diagnostics). Default:
+          WARNING.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+      <Config>
+        <Name>Namespace</Name>
+        <Target>NAMESPACE</Target>
+        <Default>default</Default>
+        <Mode>r</Mode>
+        <Description>
+          Honcho namespace identifier. Each namespace is an isolated data
+          partition — agents in different namespaces cannot see each other&amp;#39;s
+          memories. Useful for multi-tenant or multi-agent setups. Default: &amp;quot;default&amp;quot;.
+        </Description>
+        <Display>advanced</Display>
+      </Config>
+    </Category>
+  </Config>
+  <Changes>
+    - Initial release: Honcho v3.0.12, PostgreSQL 17+pgvector, Redis 7.x
+    - Provider abstraction: 7 providers with &amp;lt;provider&amp;gt;/&amp;lt;model&amp;gt; syntax
+    - Embedding dimension guard at boot
+    - Hermes AI native integration supported
+  </Changes>
+</Container>
