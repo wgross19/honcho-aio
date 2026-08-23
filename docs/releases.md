@@ -1,23 +1,33 @@
 # Releases
 
-`unraid-aio-template` uses normal semver releases such as `v0.1.0`.
+This repo uses wrapper tags such as `v3.0.12-aio.1`, aligned to the pinned Honcho version.
 
-This repository is not tied to a single wrapped upstream application, so it should not use the app-style `upstream-version-aio.N` format that the derived AIO repos use.
+## Release Model
 
-## What a template release means
+- App repos publish from `main` through the central `aio-fleet` control plane after required validation passes.
+- Formal changelog entries and GitHub Releases are release-driven, not automatic for every merge.
+- The XML `<Changes>` block is generated from `CHANGELOG.md` during release preparation. Do not edit it manually.
 
-A template release is a versioned milestone for the scaffolding itself, including:
+## Tag Scheme
 
-- CI and workflow changes
-- release automation updates
-- documentation and support-thread templates
-- XML and catalog sync defaults
-- generic Docker and rootfs scaffolding improvements
+Every normal `main` publish emits Docker Hub and GHCR tags for:
 
-## Release flow
+- `latest`
+- `sha-<commit>`
 
-1. From `aio-fleet`, run `python -m aio_fleet release status --repo unraid-aio-template` to inspect the next semver release.
-2. Run `python -m aio_fleet release prepare --repo unraid-aio-template` on a release branch, then open a `chore(release): <version>` PR.
-3. Review and merge that PR into `main`.
-4. Run the central `aio-fleet` control check for the release target commit and require `aio-fleet / required` to pass.
-5. Run `python -m aio_fleet release publish --repo unraid-aio-template` from `aio-fleet` to create the GitHub Release.
+Formal release publishes add the changelog release tag, such as `v3.0.12-aio.1`. Image: `dub19/honcho-aio` (GHCR: `ghcr.io/wgross19/honcho-aio`).
+
+## Release Commands
+
+Run these from the `aio-fleet` checkout:
+
+```bash
+uv run aio-fleet release status --repo honcho-aio
+uv run aio-fleet release prepare --repo honcho-aio --dry-run
+uv run aio-fleet release publish --repo honcho-aio --dry-run
+uv run aio-fleet registry verify --repo honcho-aio --sha <commit-sha> --dry-run --verbose
+```
+
+## Upstream Tracking
+
+The Dockerfile pins official `plastic-labs/honcho` via `HONCHO_VERSION` and `HONCHO_GIT_SHA`. Upstream bumps are initiated centrally with `aio-fleet upstream monitor`, which opens a PR for human review. Never auto-merge an upstream update without reviewing database, auth, and embedding-schema effects.

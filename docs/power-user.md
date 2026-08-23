@@ -1,21 +1,10 @@
-# Customization Guide
+# Power User Guide
 
-Use this file as the per-app advanced configuration guide in derived repos.
+Advanced configuration for the honcho-aio container.
 
-Recommended sections:
+## Model strings
 
-## 1. Internal vs External Services
-
-Document which databases, search backends, or sidecars are internal by default and which can be overridden.
-
-## 2. AI Provider Overrides
-
-Model strings use the format `<provider>/<model>` where `<provider>` is one of:
-`local`, `ollama`, `openai`, `openrouter`, `together`, `anthropic`, `gemini`.
-The split is on the **first** `/`; the model portion may contain nested slashes
-(e.g. `openrouter/openai/gpt-5.4-mini` → provider=`openrouter`, model=`openai/gpt-5.4-mini`).
-
-### Provider → transport mapping
+`EMBEDDING_MODEL` and `CHAT_MODEL` use `<provider>/<model>`. The split is on the **first** `/`. Nested slashes stay in the model name (`openrouter/openai/gpt-5.4-mini` → provider `openrouter`, model `openai/gpt-5.4-mini`).
 
 | Provider     | Transport | Base URL (override)            | Key env                 |
 | ------------ | --------- | ------------------------------ | ----------------------- |
@@ -28,35 +17,46 @@ The split is on the **first** `/`; the model portion may contain nested slashes
 | `gemini`     | gemini    | upstream default               | `LLM_GEMINI_API_KEY`    |
 
 `EMBEDDING_MODEL` supports: `local`, `ollama`, `openai`, `openrouter`, `together`, `gemini`.
-`CHAT_MODEL` supports all seven providers above.
+`CHAT_MODEL` supports all seven providers.
 
-`local/` chat model uses a single local engine at `LOCAL_BASE_URL` with **no cloud
-fallback** — traffic is routed exclusively to the local endpoint.
+`local/` chat uses a single engine at `LOCAL_BASE_URL` with **no cloud fallback**.
 
-### Dimension guard
+## Dimension guard
 
-At boot time the image probes the embedding model for its actual output
-dimension. If the returned width does not match `EMBEDDING_VECTOR_DIMENSIONS`
-(default 768) the boot fails with a clear error. The probe tolerates auth
-and connection failures (e.g. local provider not yet running); Honcho's
-runtime check catches dimension mismatches at first request.
+At boot the image probes the embedding model for its output width. If that width does not match `EMBEDDING_VECTOR_DIMENSIONS` (default 768) boot fails. The probe tolerates auth and connection failures (for example a local provider that is not up yet). Honcho still checks width at first request.
 
-### Tool-calling requirement (PRD Req 9)
+## Tool calling
 
-The chat/deriver/analyst model **must support tool/function calling**.
-Providers and models that do not support native tool calling (e.g. some
-pure-chat completion models) will break the agent derivation and dialectic
-loops. When selecting a `CHAT_MODEL`, verify it advertises tool-calling
-capability with the target provider.
+The chat / deriver / analyst model **must support tool/function calling**. Pure-chat models break derivation and dialectic loops.
 
-## 3. Remote Access
+## Hermes
 
-Document required hostname, proxy, CSRF, and trusted-domain settings.
+This image is a native Honcho memory backend, not an MCP server.
 
-## 4. Storage Paths
+```bash
+hermes memory setup
+# base URL: http://<lan>:8000
+hermes memory status
+```
 
-Document every mapped path and what data it stores.
+Confirm `honcho_search` / `honcho_context` / `honcho_conclude` respond after first boot.
 
-## 5. Optional Integrations
+## Listen addresses
 
-Document sandboxes, web search, telemetry, TTS, auth providers, or any other optional upstream features.
+- `8000` — Honcho API, all interfaces
+- `5432` — Postgres, `127.0.0.1` only
+- `6379` — Redis, `127.0.0.1` only
+
+Do not publish Postgres or Redis. Do not give agents `DATABASE_URL`.
+
+## Persistence
+
+Host defaults:
+
+- `/mnt/user/appdata/honcho-aio/postgres` → `/data/postgres`
+- `/mnt/user/appdata/honcho-aio/redis` → `/data/redis`
+- `/mnt/user/appdata/honcho-aio/honcho` → `/var/lib/honcho` (`runtime.env` mode 600)
+
+## Advanced toggles
+
+Unraid XML advanced fields: `AUTH_USE_AUTH`, `AUTH_JWT_SECRET`, `METRICS_ENABLED`, `TELEMETRY_ENABLED`, `SENTRY_ENABLED`, `SENTRY_DSN`, `WEBHOOK_SECRET`, `DERIVER_WORKERS`, `LLM_LOG_LEVEL`, `NAMESPACE`.

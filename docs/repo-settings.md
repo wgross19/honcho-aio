@@ -1,6 +1,6 @@
 # Recommended GitHub Settings
 
-Apply these to every derived repo before it becomes public.
+Apply these to `wgross19/honcho-aio` before a public catalog push.
 
 ## General
 

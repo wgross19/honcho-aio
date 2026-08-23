@@ -1,23 +1,23 @@
 # Upstream Tracking
 
-Upstream tracking is owned by `aio-fleet`, not by app-local scripts. Derived repos declare upstream metadata in `.aio-fleet.yml`; the central `aio-fleet/fleet.yml` remains the source for generated manifests and control-plane policy.
+Upstream tracking is owned by `aio-fleet`, not by app-local scripts. This repo declares upstream metadata in `.aio-fleet.yml`; the central `aio-fleet/fleet.yml` remains the source for generated manifests and control-plane policy.
 
 ## Required Inputs
 
-- upstream name and source repository
-- Dockerfile ARG that pins the upstream version
-- optional digest ARGs for images that should be immutable
-- update strategy: `pr` for safe single-image bumps, `notify` for multi-image stacks that need manual review
+- Upstream name and source repository: `plastic-labs/honcho`.
+- Dockerfile ARGs that pin the upstream version: `HONCHO_VERSION` and `HONCHO_GIT_SHA`.
+- Update strategy: `pr` for reviewed tag bumps (`stable_only`).
 
-## Dify-Style Multi-Image Stacks
+## Honcho-Specific Note
 
-Dify pins multiple companion images. Keep those bumps explicit so API, web, sandbox, plugin daemon, and digest changes move together in one reviewed release task.
+Honcho is source-built. The Dockerfile clones `plastic-labs/honcho` and checks out `HONCHO_GIT_SHA`. The fleet release label is `HONCHO_VERSION` (currently `v3.0.12`). When the monitor bumps the tag, move the commit SHA with it.
 
 ## Validation
 
 Run this from `aio-fleet` after changing upstream metadata or Dockerfile pins:
 
-```sh
-python -m aio_fleet validate --repo <repo>
-python -m aio_fleet release status --repo <repo>
+```bash
+uv run aio-fleet validate-repo --repo honcho-aio --repo-path ../honcho-aio
+uv run aio-fleet release status --repo honcho-aio
+uv run aio-fleet upstream monitor --repo honcho-aio --repo-path ../honcho-aio --dry-run
 ```
