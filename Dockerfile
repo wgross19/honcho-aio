@@ -35,7 +35,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=300000 \
     S6_KEEP_ENV=1
 
+# trunk-ignore hadolint/DL3002: s6-overlay requires root init so cont-init scripts can prepare state
+# hadolint ignore=DL3002
 USER root
+# hadolint ignore=DL3008,DL4006
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \

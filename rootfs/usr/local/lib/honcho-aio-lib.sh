@@ -1,6 +1,7 @@
 #!/bin/sh
 # Helpers for honcho-aio s6 services. Sourced (.) by run scripts.
 
+# shellcheck disable=SC2312
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 
 # Load operator-provided first-run values persisted by 01-bootstrap.sh.

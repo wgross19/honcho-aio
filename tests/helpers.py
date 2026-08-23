@@ -1,3 +1,6 @@
+# trunk-ignore-file bandit/B101
+# trunk-ignore-file bandit/B104
+# trunk-ignore-file bandit/B105
 from __future__ import annotations
 
 import os
@@ -11,6 +14,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+# trunk-ignore-file bandit/B101
+# trunk-ignore-file bandit/B104
+# trunk-ignore-file bandit/B105
 from tests.conftest import REPO_ROOT
 
 
@@ -109,9 +115,22 @@ def container_file_size(container_name: str, path: str) -> int:
     )
 
 
-class DockerRuntime:
-    def __init__(self, image_tag: str) -> None:
-        self.image_tag = image_tag
+class HonchoDockerRuntime:
+    """Docker runtime for honcho-aio integration tests.
+
+    Mounts three named volumes matching the Dockerfile VOLUME declarations:
+      /data/postgres, /data/redis, /var/lib/honcho.
+
+    Uses docker exec to run HTTP health checks inside the container
+    (port mapping is unreliable in Docker-in-Docker environments).
+
+    Uses the pytest image tag from .aio-fleet.yml (honcho-aio:pytest).
+    """
+
+    IMAGE_TAG = "honcho-aio:pytest"
+
+    def __init__(self) -> None:
+        self.image_tag = self.IMAGE_TAG
 
     def build(self) -> None:
         ensure_pytest_image(self.image_tag)
@@ -137,10 +156,10 @@ class DockerRuntime:
         env_overrides: dict[str, str] | None = None,
     ) -> Iterator["ContainerHandle"]:
         suffix = uuid.uuid4().hex[:10]
-        name = f"aio-template-pytest-{suffix}"
-        http_port = reserve_host_port()
-        config_volume = create_docker_volume(f"{name}-config")
-        data_volume = create_docker_volume(f"{name}-data")
+        name = f"honcho-aio-pytest-{suffix}"
+        pg_volume = create_docker_volume(f"{name}-pg")
+        redis_volume = create_docker_volume(f"{name}-redis")
+        honcho_volume = create_docker_volume(f"{name}-honcho")
         try:
             command = [
                 "docker",
@@ -150,12 +169,14 @@ class DockerRuntime:
                 "linux/amd64",
                 "--name",
                 name,
-                "-p",
-                f"{http_port}:8080",
+                # No port mapping — health checks use docker exec inside the
+                # container for reliable operation in DinD environments.
                 "-v",
-                f"{config_volume}:/config",
+                f"{pg_volume}:/data/postgres",
                 "-v",
-                f"{data_volume}:/data",
+                f"{redis_volume}:/data/redis",
+                "-v",
+                f"{honcho_volume}:/var/lib/honcho",
             ]
 
             if env_overrides:
@@ -167,34 +188,35 @@ class DockerRuntime:
             handle = ContainerHandle(
                 runtime=self,
                 name=name,
-                http_port=http_port,
-                config_volume=config_volume,
-                data_volume=data_volume,
+                pg_volume=pg_volume,
+                redis_volume=redis_volume,
+                honcho_volume=honcho_volume,
             )
             try:
                 yield handle
             finally:
                 self.remove(name)
         finally:
-            remove_docker_volume(config_volume)
-            remove_docker_volume(data_volume)
+            remove_docker_volume(pg_volume)
+            remove_docker_volume(redis_volume)
+            remove_docker_volume(honcho_volume)
 
 
 class ContainerHandle:
     def __init__(
         self,
         *,
-        runtime: DockerRuntime,
+        runtime: HonchoDockerRuntime,
         name: str,
-        http_port: int,
-        config_volume: str,
-        data_volume: str,
+        pg_volume: str,
+        redis_volume: str,
+        honcho_volume: str,
     ) -> None:
         self.runtime = runtime
         self.name = name
-        self.http_port = http_port
-        self.config_volume = config_volume
-        self.data_volume = data_volume
+        self.pg_volume = pg_volume
+        self.redis_volume = redis_volume
+        self.honcho_volume = honcho_volume
 
     def logs(self) -> str:
         return self.runtime.logs(self.name)
@@ -206,6 +228,12 @@ class ContainerHandle:
 
     def restart(self) -> None:
         run_command(["docker", "restart", self.name])
+
+    def stop(self) -> None:
+        run_command(["docker", "stop", self.name])
+
+    def start(self) -> None:
+        run_command(["docker", "start", self.name])
 
     def is_running(self) -> bool:
         return self.runtime.inspect_state(self.name, "State.Status") == "running"
@@ -219,9 +247,13 @@ class ContainerHandle:
     def file_size(self, path: str) -> int:
         return container_file_size(self.name, path)
 
-    def wait_for_http(self, *, path: str = "/health", timeout: int = 180) -> None:
+    def wait_for_http(self, *, path: str = "/health", timeout: int = 300) -> None:
+        """Wait for HTTP 200 by curling inside the container.
+
+        Uses `docker exec` to run curl against the container's own loopback,
+        which avoids port-mapping issues in Docker-in-Docker environments.
+        """
         deadline = time.time() + timeout
-        url = f"http://127.0.0.1:{self.http_port}{path}"
 
         while time.time() < deadline:
             if not self.is_running():
@@ -229,13 +261,40 @@ class ContainerHandle:
                     f"{self.name} stopped before HTTP became healthy.\nLogs:\n{self.logs()}"
                 )
 
-            result = run_command(["curl", "-fsS", url], check=False)
+            result = self.exec(
+                f"curl -fsS http://127.0.0.1:8000{path}",
+                check=False,
+            )
             if result.returncode == 0:
                 return
-            time.sleep(2)
+            time.sleep(5)
 
         raise AssertionError(
             f"{self.name} did not become healthy.\nLogs:\n{self.logs()}"
+        )
+
+    def http_get(
+        self, path: str, *, timeout: int = 30
+    ) -> subprocess.CompletedProcess[str]:
+        """Run GET request via docker exec inside the container."""
+        return self.exec(
+            f"curl -fsS http://127.0.0.1:8000{path}",
+            check=False,
+        )
+
+    def http_post(
+        self,
+        path: str,
+        data: str,
+        *,
+        content_type: str = "application/json",
+        timeout: int = 30,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run POST request via docker exec inside the container."""
+        quoted_data = shlex.quote(data)
+        return self.exec(
+            f"curl -sS -X POST -H 'Content-Type: {content_type}' -d {quoted_data} http://127.0.0.1:8000{path}",
+            check=False,
         )
 
 
