@@ -20,12 +20,13 @@ First run:
 
 The chat model must support tool/function calling. At boot the image probes embedding width. A mismatch with EMBEDDING_VECTOR_DIMENSIONS fails boot.</Overview>
   <Changes>### 2026-08-23
+- Generated from CHANGELOG.md during release preparation. Do not edit manually.
 - Rewrite XML to Unraid CA Config attribute shape (Type/Display/Mask)
 - Honcho v3.0.12, PostgreSQL 17+pgvector, Redis, s6
 - Provider abstraction and embedding dimension guard</Changes>
-  <Category>AI:LLM</Category>
+  <Category>AI Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8000]</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/wgross19/honcho-aio/main/honcho-aio.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/wgross19/awesome-unraid/main/honcho-aio.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/wgross19/awesome-unraid/main/icons/honcho.png</Icon>
   <ExtraSearchTerms>honcho memory agent postgres pgvector redis hermes</ExtraSearchTerms>
   <Requires>Docker. A LAN IP you control. Optional: a local OpenAI-compatible embed/chat endpoint for local/ models.</Requires>

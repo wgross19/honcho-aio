@@ -25,9 +25,16 @@ upstream:
       strategy: pr
       release_notes_url: https://github.com/plastic-labs/honcho/releases
 template:
+  xml_paths:
+    - honcho-aio.xml
   generated: false
 catalog:
-  published: false
+  published: true
+  assets:
+    - source: honcho-aio.xml
+      target: honcho-aio.xml
+    - source: assets/app-icon.png
+      target: icons/honcho.png
 tests:
   integration: tests/integration -m integration --timeout=90
   checkout_submodules: false
