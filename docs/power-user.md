@@ -6,20 +6,22 @@ Advanced configuration for the honcho-aio container.
 
 `EMBEDDING_MODEL` and `CHAT_MODEL` use `<provider>/<model>`. The split is on the **first** `/`. Nested slashes stay in the model name (`openrouter/openai/gpt-5.4-mini` → provider `openrouter`, model `openai/gpt-5.4-mini`).
 
-| Provider     | Transport | Base URL (override)            | Key env                 |
-| ------------ | --------- | ------------------------------ | ----------------------- |
-| `local`      | openai    | `LOCAL_BASE_URL` (required)    | `LOCAL_API_KEY` (opt.)  |
-| `ollama`     | openai    | `https://ollama.com/v1`        | `OLLAMA_API_KEY`        |
-| `openai`     | openai    | upstream default               | `LLM_OPENAI_API_KEY`    |
-| `openrouter` | openai    | `https://openrouter.ai/api/v1` | `LLM_OPENAI_API_KEY`    |
-| `together`   | openai    | `https://api.together.xyz/v1`  | `LLM_OPENAI_API_KEY`    |
-| `anthropic`  | anthropic | upstream default               | `LLM_ANTHROPIC_API_KEY` |
-| `gemini`     | gemini    | upstream default               | `LLM_GEMINI_API_KEY`    |
+| Provider     | Transport | Base URL (override)            | Key env                                                    |
+| ------------ | --------- | ------------------------------ | ---------------------------------------------------------- |
+| `local`      | openai    | `LOCAL_BASE_URL` (required)    | `LOCAL_API_KEY` (opt.; placeholder substituted when empty) |
+| `ollama`     | openai    | `https://ollama.com/v1`        | `OLLAMA_API_KEY`                                           |
+| `openai`     | openai    | upstream default               | `LLM_OPENAI_API_KEY`                                       |
+| `openrouter` | openai    | `https://openrouter.ai/api/v1` | `LLM_OPENAI_API_KEY`                                       |
+| `together`   | openai    | `https://api.together.xyz/v1`  | `LLM_OPENAI_API_KEY`                                       |
+| `anthropic`  | anthropic | upstream default               | `LLM_ANTHROPIC_API_KEY`                                    |
+| `gemini`     | gemini    | upstream default               | `LLM_GEMINI_API_KEY`                                       |
 
 `EMBEDDING_MODEL` supports: `local`, `ollama`, `openai`, `openrouter`, `together`, `gemini`.
 `CHAT_MODEL` supports all seven providers.
 
 `local/` chat uses a single engine at `LOCAL_BASE_URL` with **no cloud fallback**.
+
+`LOCAL_API_KEY` is optional for endpoints without auth. When it is empty the container substitutes the placeholder `not-needed`. Upstream Honcho requires a non-None api_key for openai-transport models, so an empty key breaks model loading. Most local OpenAI-compatible endpoints (Ollama, llama.cpp, vLLM) accept any value.
 
 ## Dimension guard
 

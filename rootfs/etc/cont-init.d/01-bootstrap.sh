@@ -51,6 +51,18 @@ if [[ -z ${CHAT_PROVIDER} ]] || [[ -z ${CHAT_MODEL_NAME} ]]; then
 	exit 64
 fi
 
+# Resolve LOCAL_API_KEY once: substitute a non-empty placeholder when unset/empty.
+# Upstream Honcho requires a non-None api_key for openai-transport models
+# (embedding client raises "OpenAI API key is required"; chat credentials resolve
+# to None and the OpenAI SDK raises OpenAIError("The api_key client option must
+# be set...")). Most local OpenAI-compat endpoints (Ollama, llama.cpp, vLLM)
+# accept any non-empty value.
+if [[ -z ${LOCAL_API_KEY-} ]]; then
+	LOCAL_API_KEY="not-needed"
+	log "LOCAL_API_KEY empty — substituting placeholder 'not-needed'"
+fi
+export LOCAL_API_KEY
+
 # Map embedding provider → transport + base URL + key env.
 EMBEDDING_VECTOR_DIMENSIONS="${EMBEDDING_VECTOR_DIMENSIONS:-768}"
 embed_transport="openai"
@@ -96,6 +108,7 @@ chat_key_env=""
 case "${CHAT_PROVIDER}" in
 local)
 	chat_base_url="${LOCAL_BASE_URL:?error: LOCAL_BASE_URL required for provider 'local'}"
+	chat_key_env="LOCAL_API_KEY"
 	# Single local model with NO cloud fallback (per addendum).
 	;;
 ollama)
@@ -170,6 +183,13 @@ umask 077
 			echo "${_pfx}__overrides__api_key_env=${chat_key_env}"
 		fi
 	done
+
+	# Persist the resolved key env vars so s6 services (which load runtime.env
+	# via load_runtime) see them even when the operator left the container env
+	# empty. api_key_env values are env-var NAMES, not secrets.
+	echo ""
+	echo "# --- Resolved API key env names (persisted for s6 services) ---"
+	echo "LOCAL_API_KEY=${LOCAL_API_KEY}"
 } >/var/lib/honcho/runtime.env
 chown honcho:users /var/lib/honcho/runtime.env
 chmod 600 /var/lib/honcho/runtime.env

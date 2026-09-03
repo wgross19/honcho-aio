@@ -24,7 +24,9 @@ if os.path.isfile(RUNTIME_ENV):
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
-                os.environ.setdefault(k, v)
+                if os.environ.get(k):
+                    continue  # container env wins unless it is empty/unset
+                os.environ[k] = v
 
 
 def log(msg: str) -> None:
