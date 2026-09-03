@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## v3.1.0-aio.1 - 2026-09-03
+
+### Documentation
+
+- Rewrite honcho-aio README and guides as a real app
+
+- Apply Honcho + AIO product description
+
+### Fixes
+
+- Escape changelog provider/model for markdownlint
+
+- Replace README HTML icon block with markdown image
+
+- Replace README HTML icon block with markdown image
+
+- Pin HONCHO_GIT_SHA to the v3.1.0 commit
+
+- Resolve LOCAL_API_KEY for local/ chat models (GH #2)
+
+### Maintenance
+
+- Use official Honcho logo as app icon
+
+- Prune stale worktrees + remove disposable venvs
+
+- Optimize app-icon.png with oxipng
+
+- Bump honcho to v3.1.0
+
 ## v3.0.12-aio.1 - 2026-08-23
 
 ### Other Changes
