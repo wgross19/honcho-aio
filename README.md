@@ -1,6 +1,6 @@
 # honcho-aio
 
-<p align="center"><img src="assets/app-icon.png" width="128" alt="Honcho"></p>
+![Honcho](assets/app-icon.png)
 
 Run [Honcho](https://github.com/plastic-labs/honcho) as one Unraid container. Honcho is memory for stateful agents. It stores messages, reasons in the background, then returns context, search, and peer conclusions. honcho-aio runs that stack as one image: Honcho API, PostgreSQL 17 + pgvector, Redis, and s6. Databases stay on loopback. Point Hermes at `http://<lan>:8000`. No MCP.
 
