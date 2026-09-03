@@ -15,7 +15,7 @@ FROM ${DEBIAN_IMAGE}
 # the HONCHO_VERSION ARG (version_key). The build itself stays pinned to
 # HONCHO_GIT_SHA; HONCHO_VERSION is the discoverable release label only.
 ARG HONCHO_VERSION=v3.1.0
-ARG HONCHO_GIT_SHA=8fcbb54a49292341dba79d606ee332c50778429b
+ARG HONCHO_GIT_SHA=9380bf2753b0001cee6bea34c95896b5bda56fc2
 ARG HONCHO_REPO=https://github.com/plastic-labs/honcho.git
 ARG S6_OVERLAY_VERSION=3.2.1.0
 ARG POSTGRES_MAJOR=17
