@@ -74,12 +74,20 @@ RUN apt-get update \
 COPY --from=uv /uv /usr/local/bin/uv
 
 WORKDIR /opt/honcho
+# Upstream v3.1.1 requires Python >=3.13 (bookworm apt ships 3.11), so uv
+# auto-downloads a managed CPython at build. Keep that interpreter in a
+# world-readable path: uv defaults to $HOME/.local/share/uv (=/root/...,
+# mode 0700 on bookworm), and runtime services exec the venv as gosu honcho,
+# which cannot traverse /root. Without this the venv python fails to exec and
+# honcho-api/deriver never start (health never binds).
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
 RUN git clone --filter=blob:none "${HONCHO_REPO}" /tmp/honcho-src \
   && git -C /tmp/honcho-src checkout --detach "${HONCHO_GIT_SHA}" \
   && test "$(git -C /tmp/honcho-src rev-parse HEAD)" = "${HONCHO_GIT_SHA}" \
   && cp -a /tmp/honcho-src/. /opt/honcho/ \
   && rm -rf /tmp/honcho-src \
   && uv sync --frozen --no-install-project --no-group dev \
+  && chmod -R a+rX /opt/uv/python \
   && chown -R honcho:users /opt/honcho \
   && printf '%s\n' '#!/bin/sh' \
        'exec /opt/honcho/.venv/bin/fastapi run --host 0.0.0.0 --port 8000 /opt/honcho/src/main.py' \
