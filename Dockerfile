@@ -14,8 +14,8 @@ FROM ${DEBIAN_IMAGE}
 # Upstream Honcho pinned release. The fleet monitor drives the release tag via
 # the HONCHO_VERSION ARG (version_key). The build itself stays pinned to
 # HONCHO_GIT_SHA; HONCHO_VERSION is the discoverable release label only.
-ARG HONCHO_VERSION=v3.1.0
-ARG HONCHO_GIT_SHA=9380bf2753b0001cee6bea34c95896b5bda56fc2
+ARG HONCHO_VERSION=v3.1.1
+ARG HONCHO_GIT_SHA=5d992bc65afcfbc05a5911ab4edbaa88ef64c690
 ARG HONCHO_REPO=https://github.com/plastic-labs/honcho.git
 ARG S6_OVERLAY_VERSION=3.2.1.0
 ARG POSTGRES_MAJOR=17
@@ -74,12 +74,20 @@ RUN apt-get update \
 COPY --from=uv /uv /usr/local/bin/uv
 
 WORKDIR /opt/honcho
+# Upstream v3.1.1 requires Python >=3.13 (bookworm apt ships 3.11), so uv
+# auto-downloads a managed CPython at build. Keep that interpreter in a
+# world-readable path: uv defaults to $HOME/.local/share/uv (=/root/...,
+# mode 0700 on bookworm), and runtime services exec the venv as gosu honcho,
+# which cannot traverse /root. Without this the venv python fails to exec and
+# honcho-api/deriver never start (health never binds).
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
 RUN git clone --filter=blob:none "${HONCHO_REPO}" /tmp/honcho-src \
   && git -C /tmp/honcho-src checkout --detach "${HONCHO_GIT_SHA}" \
   && test "$(git -C /tmp/honcho-src rev-parse HEAD)" = "${HONCHO_GIT_SHA}" \
   && cp -a /tmp/honcho-src/. /opt/honcho/ \
   && rm -rf /tmp/honcho-src \
   && uv sync --frozen --no-install-project --no-group dev \
+  && chmod -R a+rX /opt/uv/python \
   && chown -R honcho:users /opt/honcho \
   && printf '%s\n' '#!/bin/sh' \
        'exec /opt/honcho/.venv/bin/fastapi run --host 0.0.0.0 --port 8000 /opt/honcho/src/main.py' \
