@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v3.3.0-aio.1 - 2026-10-08
+
+### Maintenance
+
+- Bump honcho to v3.1.1 (#14)
+
+- Bump honcho to v3.3.0 (#39)
+
 ## v3.1.0-aio.1 - 2026-09-03
 
 ### Documentation
