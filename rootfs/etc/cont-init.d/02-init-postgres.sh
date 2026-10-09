@@ -18,12 +18,23 @@ if [[ ! -s "${PGDATA}/PG_VERSION" ]]; then
 fi
 
 install -d -m 0755 "${PGDATA}/conf.d"
-cat >"${PGDATA}/conf.d/aio.conf" <<'EOF'
-listen_addresses = '127.0.0.1'
+PG_LISTEN_ADDRESSES="127.0.0.1"
+if [[ "${POSTGRES_ALLOW_REMOTE:-false}" == "true" ]]; then
+	PG_LISTEN_ADDRESSES="*"
+fi
+
+cat >"${PGDATA}/conf.d/aio.conf" <<EOF
+listen_addresses = '${PG_LISTEN_ADDRESSES}'
 port = 5432
 unix_socket_directories = '/run/postgresql'
 EOF
 chown -R postgres:postgres "${PGDATA}/conf.d"
+
+if [[ "${POSTGRES_ALLOW_REMOTE:-false}" == "true" ]]; then
+	if [[ -f "${PGDATA}/pg_hba.conf" ]] && ! grep -q "# honcho-aio remote access" "${PGDATA}/pg_hba.conf"; then
+		printf "\n# honcho-aio remote access\nhost all all all scram-sha-256\n" >>"${PGDATA}/pg_hba.conf"
+	fi
+fi
 
 if ! grep -q "include_dir = 'conf.d'" "${PGDATA}/postgresql.conf"; then
 	printf "\ninclude_dir = 'conf.d'\n" >>"${PGDATA}/postgresql.conf"
