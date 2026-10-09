@@ -20,6 +20,10 @@ First run:
 4. Fill only the API key for the provider you picked.
 5. Start, then point Hermes with: hermes memory setup → http://&lt;lan&gt;:8000
 
+Basic/default setup: follow these steps and use the internal PostgreSQL and Redis services. Leave advanced options at their defaults unless you need them.
+
+Advanced configuration can select local or cloud providers and custom model settings, including embedding dimensions. Optional advanced fields control API authentication, metrics, telemetry, Sentry, webhooks, worker count, logging, and namespace.
+
 The chat model must support tool/function calling. At boot the image probes embedding width. A mismatch with EMBEDDING_VECTOR_DIMENSIONS fails boot.</Overview>
   <Changes>### 2026-10-08&#xD;
 - Generated from CHANGELOG.md during release preparation. Do not edit manually.&#xD;
