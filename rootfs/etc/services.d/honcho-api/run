@@ -23,4 +23,11 @@ gosu honcho env HOME=/var/lib/honcho \
 gosu honcho env HOME=/var/lib/honcho \
   /opt/honcho/.venv/bin/python /opt/honcho/scripts/configure_embeddings.py --yes
 
-exec gosu honcho env HOME=/var/lib/honcho /usr/local/bin/honcho-api
+if [[ -n "${HONCHO_LOG_FILE-}" ]]; then
+	mkdir -p "$(dirname "${HONCHO_LOG_FILE}")"
+	touch "${HONCHO_LOG_FILE}"
+	chown honcho:users "${HONCHO_LOG_FILE}" 2>/dev/null || true
+	exec gosu honcho env HOME=/var/lib/honcho /usr/local/bin/honcho-api 2>&1 | tee -a "${HONCHO_LOG_FILE}"
+else
+	exec gosu honcho env HOME=/var/lib/honcho /usr/local/bin/honcho-api
+fi
