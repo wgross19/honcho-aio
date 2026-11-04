@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## v3.3.0-aio.2 - 2026-11-04
+
+### Documentation
+
+- Clarify catalog setup guidance (#41)
+
+### Fixes
+
+- Install the s6-overlay tarball for the build arch so arm64 boots
+
+- Persist RDB snapshots to /data/redis (#50)
+
 ## v3.3.0-aio.1 - 2026-10-08
 
 ### Maintenance
