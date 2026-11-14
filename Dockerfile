@@ -14,8 +14,8 @@ FROM ${DEBIAN_IMAGE}
 # Upstream Honcho pinned release. The fleet monitor drives the release tag via
 # the HONCHO_VERSION ARG (version_key). The build itself stays pinned to
 # HONCHO_GIT_SHA; HONCHO_VERSION is the discoverable release label only.
-ARG HONCHO_VERSION=v3.6.0
-ARG HONCHO_GIT_SHA=3326373c35f6538fb3b7af97803abe328c5aafb4
+ARG HONCHO_VERSION=v3.6.1
+ARG HONCHO_GIT_SHA=70c67624169683b9e265517aec95a51b8077cabc
 ARG HONCHO_REPO=https://github.com/plastic-labs/honcho.git
 ARG S6_OVERLAY_VERSION=3.2.1.0
 ARG POSTGRES_MAJOR=17
