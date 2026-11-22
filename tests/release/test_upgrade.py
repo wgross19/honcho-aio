@@ -212,10 +212,10 @@ def release_stack(env: dict[str, str], scenario: str, arch: str) -> Iterator[dic
         "cand_container": f"{base}-cand",
     }
 
-    _docker(env, "network", "create", names["network"])
-    for key in ("pg_volume", "redis_volume", "honcho_volume"):
-        _docker(env, "volume", "create", names[key])
     try:
+        _docker(env, "network", "create", names["network"])
+        for key in ("pg_volume", "redis_volume", "honcho_volume"):
+            _docker(env, "volume", "create", names[key])
         yield names
     finally:
         # Own-only cleanup: every name below was created by this context.
@@ -224,6 +224,21 @@ def release_stack(env: dict[str, str], scenario: str, arch: str) -> Iterator[dic
         for volume_key in ("pg_volume", "redis_volume", "honcho_volume"):
             _docker(env, "volume", "rm", "-f", names[volume_key], check=False)
         _docker(env, "network", "rm", names["network"], check=False)
+        # Cleanup must be complete on every path: nothing this run created may
+        # remain on the daemon. Raise on failure even when the body already
+        # failed, so a cleanup lie can never hide behind a probe failure.
+        leftovers: list[str] = []
+        for container_name in (names["prev_container"], names["cand_container"]):
+            if _docker(env, "inspect", "-f", "{{.Id}}", container_name, check=False).returncode == 0:
+                leftovers.append(f"container:{container_name}")
+        for volume_name in (names["pg_volume"], names["redis_volume"], names["honcho_volume"]):
+            if _docker(env, "volume", "inspect", volume_name, check=False).returncode == 0:
+                leftovers.append(f"volume:{volume_name}")
+        if _docker(env, "network", "inspect", names["network"], check=False).returncode == 0:
+            leftovers.append(f"network:{names['network']}")
+        assert not leftovers, (
+            f"release stack cleanup left resources of run {names['base']} behind: {leftovers}"
+        )
 
 
 def _boot_container(
@@ -329,10 +344,11 @@ def seed_message(
 ) -> str:
     """Create workspace/peer/session and write one real message; returns id.
 
-    Request bodies use the schema alias ``{"id": <label>}``, which BOTH tested
-    upstream versions accept (v3.3.0 via populate_by_name aliasing; v3.6.2
-    dropped populate_by_name, so a literal ``{"name": ...}`` would 422 on
-    session create while upgrade tests run on old images like v3.3.0).
+    Request bodies use the schema alias ``{"id": <label>}``. Upstream source
+    at both pins defines the create field as ``name`` with
+    ``Field(alias="id")`` and ``populate_by_name=True``, so both request forms
+    validate on both versions; the suite sends the alias form because the
+    live runs verified it and it mirrors the response shape (no ``name`` key).
     Responses assert the source-verified identity shapes; see
     ``assert_resource_identity``.
     """
@@ -578,21 +594,6 @@ def _run_release_probe(
         assert messages["disk_after_post_restart_write"] == messages["disk_after_restart"] + 1, (
             f"post-restart write did not reach disk: {messages}"
         )
-
-    # Fixture cleanup must be complete and own-only: after the stack closes,
-    # nothing this run created may remain on the daemon.
-    leftovers: list[str] = []
-    for container_name in (names["prev_container"], names["cand_container"]):
-        if _docker(env, "inspect", "-f", "{{.Id}}", container_name, check=False).returncode == 0:
-            leftovers.append(f"container:{container_name}")
-    for volume_name in (names["pg_volume"], names["redis_volume"], names["honcho_volume"]):
-        if _docker(env, "volume", "inspect", volume_name, check=False).returncode == 0:
-            leftovers.append(f"volume:{volume_name}")
-    if _docker(env, "network", "inspect", names["network"], check=False).returncode == 0:
-        leftovers.append(f"network:{names['network']}")
-    assert not leftovers, (
-        f"release stack cleanup left resources of run {names['base']} behind: {leftovers}"
-    )
 
     evidence = {
         "scenario": scenario,

@@ -15,10 +15,12 @@ Verified against upstream honcho at the two pins this suite runs between:
   as ``id`` plus ``peer_id``/``session_id``/``workspace_id``.
 - v3.6.x adds ``uid``: a server-generated immutable identifier, distinct from
   the client-chosen name.
-- Create-request bodies on BOTH versions accept ``{"id": <label>}`` through
-  the field alias. Only the old era also accepted a literal ``{"name": ...}``
-  (``populate_by_name=True``), and v3.6.2's SessionCreate dropped it — so the
-  suite's requests must use the alias on both versions.
+- Create-request models are identical at both pins: the field is ``name``
+  with ``Field(alias="id")`` and ``populate_by_name=True``, so both versions
+  accept ``{"id": <label>}`` and ``{"name": <label>}``. The suite always
+  sends the alias form ``{"id": ...}``: it mirrors the serialized response
+  (which carries no ``name`` key) and is the form the live runs verified on
+  both versions.
 
 The fixtures below encode exactly those shapes. Nothing loosens identity.
 """
