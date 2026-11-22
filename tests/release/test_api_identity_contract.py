@@ -42,16 +42,25 @@ REQUESTED_SESS = "honcho-rq-fixture-sess"
 
 # v3.3.0 response shapes (no name key, no uid).
 OLD_WS_RESPONSE = {
-    "id": REQUESTED_WS, "metadata": {}, "configuration": {},
+    "id": REQUESTED_WS,
+    "metadata": {},
+    "configuration": {},
     "created_at": "2026-11-21T00:00:00Z",
 }
 OLD_PEER_RESPONSE = {
-    "id": REQUESTED_PEER, "workspace_id": REQUESTED_WS,
-    "created_at": "2026-11-21T00:00:00Z", "metadata": {}, "configuration": {},
+    "id": REQUESTED_PEER,
+    "workspace_id": REQUESTED_WS,
+    "created_at": "2026-11-21T00:00:00Z",
+    "metadata": {},
+    "configuration": {},
 }
 OLD_SESSION_RESPONSE = {
-    "id": REQUESTED_SESS, "is_active": True, "workspace_id": REQUESTED_WS,
-    "created_at": "2026-11-21T00:00:00Z", "metadata": {}, "configuration": {},
+    "id": REQUESTED_SESS,
+    "is_active": True,
+    "workspace_id": REQUESTED_WS,
+    "created_at": "2026-11-21T00:00:00Z",
+    "metadata": {},
+    "configuration": {},
 }
 # v3.6.2 adds the server-generated uid; identity fields otherwise equal.
 NEW_WS_RESPONSE = {**OLD_WS_RESPONSE, "uid": "wsp_server_gen_uid_01"}
@@ -59,9 +68,13 @@ NEW_PEER_RESPONSE = {**OLD_PEER_RESPONSE, "uid": "per_server_gen_uid_02"}
 NEW_SESSION_RESPONSE = {**OLD_SESSION_RESPONSE, "uid": "ses_server_gen_uid_03"}
 
 OLD_MESSAGE_RESPONSE = {
-    "id": "msg_fixture_public_id", "content": "fixture content",
-    "peer_id": REQUESTED_PEER, "session_id": REQUESTED_SESS,
-    "workspace_id": REQUESTED_WS, "metadata": {}, "token_count": 3,
+    "id": "msg_fixture_public_id",
+    "content": "fixture content",
+    "peer_id": REQUESTED_PEER,
+    "session_id": REQUESTED_SESS,
+    "workspace_id": REQUESTED_WS,
+    "metadata": {},
+    "token_count": 3,  # nosec B105
     "created_at": "2026-11-21T00:00:00Z",
 }
 
@@ -70,13 +83,15 @@ def test_workspace_identity_accepts_serialization_alias_shape() -> None:
     """Old and new images both report the chosen name under `id`."""
     for response in (OLD_WS_RESPONSE, NEW_WS_RESPONSE):
         uid = assert_resource_identity(response, REQUESTED_WS, kind="workspace")
-        assert uid == response.get("uid")
+        assert uid == response.get("uid")  # nosec B101
 
 
 def test_resource_identity_refuses_wrong_id() -> None:
     """The response id must equal the label the caller addressed."""
     with pytest.raises(AssertionError, match="identity mismatch"):
-        assert_resource_identity({**OLD_WS_RESPONSE, "id": "someone-else"}, REQUESTED_WS)
+        assert_resource_identity(
+            {**OLD_WS_RESPONSE, "id": "someone-else"}, REQUESTED_WS
+        )
     with pytest.raises(AssertionError, match="identity mismatch"):
         assert_resource_identity({"metadata": {}}, REQUESTED_WS)  # id absent
 
@@ -104,7 +119,9 @@ def test_resource_identity_refuses_uid_copied_from_name() -> None:
         (NEW_SESSION_RESPONSE, "session"),
     ],
 )
-def test_peer_and_session_identity_with_workspace_binding(response: dict, kind: str) -> None:
+def test_peer_and_session_identity_with_workspace_binding(
+    response: dict, kind: str
+) -> None:
     """Peer/session identity checks include the workspace binding."""
     label = REQUESTED_PEER if kind == "peer" else REQUESTED_SESS
     assert_resource_identity(response, label, workspace=REQUESTED_WS, kind=kind)
@@ -115,7 +132,9 @@ def test_session_id_mismatch_is_refused() -> None:
     with pytest.raises(AssertionError, match="identity mismatch"):
         assert_resource_identity(
             {**OLD_SESSION_RESPONSE, "id": REQUESTED_PEER},
-            REQUESTED_SESS, workspace=REQUESTED_WS, kind="session",
+            REQUESTED_SESS,
+            workspace=REQUESTED_WS,
+            kind="session",
         )
 
 
@@ -124,7 +143,9 @@ def test_session_workspace_binding_mismatch_is_refused() -> None:
     with pytest.raises(AssertionError, match="workspace binding mismatch"):
         assert_resource_identity(
             {**OLD_SESSION_RESPONSE, "workspace_id": REQUESTED_SESS},
-            REQUESTED_SESS, workspace=REQUESTED_WS, kind="session",
+            REQUESTED_SESS,
+            workspace=REQUESTED_WS,
+            kind="session",
         )
 
 
@@ -133,14 +154,21 @@ def test_missing_workspace_binding_is_refused() -> None:
     unbound = {k: v for k, v in OLD_PEER_RESPONSE.items() if k != "workspace_id"}
     with pytest.raises(AssertionError, match="workspace binding mismatch"):
         assert_resource_identity(
-            unbound, REQUESTED_PEER, workspace=REQUESTED_WS, kind="peer",
+            unbound,
+            REQUESTED_PEER,
+            workspace=REQUESTED_WS,
+            kind="peer",
         )
 
 
 def test_message_chain_accepts_canonical_shape() -> None:
     assert_message_chain(
-        OLD_MESSAGE_RESPONSE, content="fixture content", peer=REQUESTED_PEER,
-        session=REQUESTED_SESS, workspace=REQUESTED_WS, context="fixture",
+        OLD_MESSAGE_RESPONSE,
+        content="fixture content",
+        peer=REQUESTED_PEER,
+        session=REQUESTED_SESS,
+        workspace=REQUESTED_WS,
+        context="fixture",
     )
 
 
@@ -158,6 +186,10 @@ def test_message_chain_refuses_every_broken_link(override: dict) -> None:
     broken = {**OLD_MESSAGE_RESPONSE, **override}
     with pytest.raises(AssertionError, match="mismatch"):
         assert_message_chain(
-            broken, content="fixture content", peer=REQUESTED_PEER,
-            session=REQUESTED_SESS, workspace=REQUESTED_WS, context="fixture",
+            broken,
+            content="fixture content",
+            peer=REQUESTED_PEER,
+            session=REQUESTED_SESS,
+            workspace=REQUESTED_WS,
+            context="fixture",
         )

@@ -76,8 +76,8 @@ def test_docker_env_strips_docker_context_from_returned_env(
     monkeypatch.setenv("DOCKER_CONTEXT", "")
     monkeypatch.setenv("AIO_RELEASE_ARCH", "arm64")  # hosted mode is ARM64-only
     env = docker_release_env()
-    assert "DOCKER_CONTEXT" not in env
-    assert env[NATIVE_RUNNER_FLAG] == "1"
+    assert "DOCKER_CONTEXT" not in env  # nosec B101
+    assert env[NATIVE_RUNNER_FLAG] == "1"  # nosec B101
 
 
 # ── Native opt-in requires the genuine hosted markers ─────────────────────
@@ -98,11 +98,11 @@ def test_native_opt_in_requires_genuine_hosted_markers(
 @pytest.mark.parametrize(
     ("actions_value", "runner_value"),
     [
-        ("1", HOSTED_RUNNER_VALUE),           # wrong truthy spelling
-        ("true", "self-hosted"),              # actions right, runner wrong
-        ("TRUE", HOSTED_RUNNER_VALUE),        # case-sensitive values
-        ("true", "GitHub-hosted"),            # case-sensitive runner value
-        ("", HOSTED_RUNNER_VALUE),            # empty marker is not genuine
+        ("1", HOSTED_RUNNER_VALUE),  # wrong truthy spelling
+        ("true", "self-hosted"),  # actions right, runner wrong
+        ("TRUE", HOSTED_RUNNER_VALUE),  # case-sensitive values
+        ("true", "GitHub-hosted"),  # case-sensitive runner value
+        ("", HOSTED_RUNNER_VALUE),  # empty marker is not genuine
     ],
 )
 def test_native_opt_in_rejects_marker_value_variants(
@@ -127,9 +127,9 @@ def test_native_opt_in_accepts_genuine_hosted_markers(
     for key, value in HOSTED_ENV.items():
         monkeypatch.setenv(key, value)
     env = docker_release_env()
-    assert env[NATIVE_RUNNER_FLAG] == "1"
-    assert env[HOSTED_ACTIONS_VAR] == "true"
-    assert env[RUNNER_ENVIRONMENT_VAR] == HOSTED_RUNNER_VALUE
+    assert env[NATIVE_RUNNER_FLAG] == "1"  # nosec B101
+    assert env[HOSTED_ACTIONS_VAR] == "true"  # nosec B101
+    assert env[RUNNER_ENVIRONMENT_VAR] == HOSTED_RUNNER_VALUE  # nosec B101
 
 
 # ── Prior negatives still hold under the hardened contract ────────────────

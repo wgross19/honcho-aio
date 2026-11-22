@@ -69,23 +69,26 @@ def assert_resource_identity(
     Returns the server-generated ``uid`` when one is present, else ``None``.
     """
     identity = response.get("id")
-    assert identity == expected_name, (
+    assert identity == expected_name, (  # nosec B101
         f"{kind} identity mismatch: id={identity!r} != requested {expected_name!r}; "
         f"response: {response!r}"
     )
     name_key = response.get("name")
-    assert name_key in (None, expected_name), (
+    assert name_key in (
+        None,
+        expected_name,
+    ), (  # nosec B101
         f"{kind} carries a contradictory name key: {name_key!r} != {expected_name!r}"
     )
     uid = response.get("uid")
     if uid is not None:
-        assert uid != expected_name, (
+        assert uid != expected_name, (  # nosec B101
             f"{kind} uid must be server-generated, not a copy of the requested "
             f"name: {uid!r}"
         )
     if workspace is not None:
         bound = response.get("workspace_id")
-        assert bound == workspace, (
+        assert bound == workspace, (  # nosec B101
             f"{kind} workspace binding mismatch: workspace_id={bound!r} != "
             f"{workspace!r}; response: {response!r}"
         )
@@ -108,19 +111,19 @@ def assert_message_chain(
     ``workspace_name`` → ``workspace_id``. Every link must match what the
     caller addressed; content equality is part of the chain.
     """
-    assert message.get("content") == content, (
+    assert message.get("content") == content, (  # nosec B101
         f"{context} content mismatch: {message.get('content')!r} != {content!r}; "
         f"message: {message!r}"
     )
-    assert message.get("peer_id") == peer, (
+    assert message.get("peer_id") == peer, (  # nosec B101
         f"{context} peer_id mismatch: {message.get('peer_id')!r} != {peer!r}; "
         f"message: {message!r}"
     )
-    assert message.get("session_id") == session, (
+    assert message.get("session_id") == session, (  # nosec B101
         f"{context} session_id mismatch: {message.get('session_id')!r} != "
         f"{session!r}; message: {message!r}"
     )
-    assert message.get("workspace_id") == workspace, (
+    assert message.get("workspace_id") == workspace, (  # nosec B101
         f"{context} workspace_id mismatch: {message.get('workspace_id')!r} != "
         f"{workspace!r}; message: {message!r}"
     )
@@ -175,13 +178,17 @@ def release_inputs() -> ReleaseInputs:
     ]
     if missing:
         raise ReleaseBlocker(
-            "Missing required release inputs: " + ", ".join(missing)
+            "Missing required release inputs: "
+            + ", ".join(missing)
             + ". The fleet candidate worker must set them; skipping would hide "
             "an unverified release."
         )
 
-    for name, ref in (("AIO_CANDIDATE_IMAGE", candidate), ("AIO_PREVIOUS_IMAGE", previous)):
-        assert ref is not None  # narrowed above; for the type checker
+    for name, ref in (
+        ("AIO_CANDIDATE_IMAGE", candidate),
+        ("AIO_PREVIOUS_IMAGE", previous),
+    ):
+        assert ref is not None  # narrowed above; for the type checker  # nosec B101
         if not DIGEST_REF_RE.match(ref):
             raise ReleaseBlocker(
                 f"{name} must be a digest-pinned ref (<name>@sha256:<64 hex>), got {ref!r}. "
@@ -193,7 +200,9 @@ def release_inputs() -> ReleaseInputs:
             f"AIO_RELEASE_ARCH must be one of {sorted(ALLOWED_ARCHES)}, got {arch!r}."
         )
 
-    assert candidate is not None and previous is not None  # narrowed above
+    assert (
+        candidate is not None and previous is not None
+    )  # narrowed above  # nosec B101
     return ReleaseInputs(candidate_ref=candidate, previous_ref=previous, arch=arch)
 
 
@@ -310,8 +319,8 @@ def suite_git_head() -> str | None:
     if pinned:
         return pinned
     try:
-        head = subprocess.run(  # nosec B603
-            ["git", "rev-parse", "HEAD"],
+        head = subprocess.run(  # nosec B603, B607
+            ["git", "rev-parse", "HEAD"],  # nosec B607
             capture_output=True,
             text=True,
             timeout=10,

@@ -20,10 +20,10 @@ import pytest
 from tests.release import conftest
 from tests.release.conftest import (
     ALLOWED_DIND_HOST,
+    NATIVE_RUNNER_FLAG,
     SOCKET_DIND_TLS,
     SOCKET_HOST_DEFAULT,
     DockerSession,
-    NATIVE_RUNNER_FLAG,
     ReleaseBlocker,
     docker_session,
 )
@@ -36,7 +36,9 @@ HOSTED_ENV = {
 }
 
 
-def _fake_certs(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
+def _fake_certs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> pathlib.Path:
     cert_dir = tmp_path / "certs"
     cert_dir.mkdir()
     for name in ("ca.pem", "cert.pem", "key.pem"):
@@ -56,12 +58,12 @@ def test_dind_path_classified_with_fake_certs(
     monkeypatch.setenv("DOCKER_TLS_VERIFY", "1")
     monkeypatch.setenv("DOCKER_CERT_PATH", str(cert_dir))
     session = docker_session()
-    assert isinstance(session, DockerSession)
-    assert session.mode == SOCKET_DIND_TLS
-    assert session.hosted is False
-    assert session.env["DOCKER_HOST"] == ALLOWED_DIND_HOST
-    assert session.env["DOCKER_TLS_VERIFY"] == "1"
-    assert "DOCKER_CONTEXT" not in session.env
+    assert isinstance(session, DockerSession)  # nosec B101
+    assert session.mode == SOCKET_DIND_TLS  # nosec B101
+    assert session.hosted is False  # nosec B101
+    assert session.env["DOCKER_HOST"] == ALLOWED_DIND_HOST  # nosec B101
+    assert session.env["DOCKER_TLS_VERIFY"] == "1"  # nosec B101
+    assert "DOCKER_CONTEXT" not in session.env  # nosec B101
 
 
 def test_dind_path_refuses_missing_cert_file(
@@ -100,13 +102,13 @@ def test_hosted_arm64_opt_in_classified_host_default(
 ) -> None:
     _opt_in_hosted(monkeypatch, "arm64")
     session = docker_session()
-    assert session.mode == SOCKET_HOST_DEFAULT
-    assert session.hosted is True
-    assert "DOCKER_HOST" not in session.env
-    assert "DOCKER_CONTEXT" not in session.env
-    assert session.env["AIO_RELEASE_NATIVE_DOCKER"] == "1"
-    assert session.env["GITHUB_ACTIONS"] == "true"
-    assert session.env["RUNNER_ENVIRONMENT"] == "github-hosted"
+    assert session.mode == SOCKET_HOST_DEFAULT  # nosec B101
+    assert session.hosted is True  # nosec B101
+    assert "DOCKER_HOST" not in session.env  # nosec B101
+    assert "DOCKER_CONTEXT" not in session.env  # nosec B101
+    assert session.env["AIO_RELEASE_NATIVE_DOCKER"] == "1"  # nosec B101
+    assert session.env["GITHUB_ACTIONS"] == "true"  # nosec B101
+    assert session.env["RUNNER_ENVIRONMENT"] == "github-hosted"  # nosec B101
 
 
 @pytest.mark.parametrize("arch", ["amd64", "aarch64", None])

@@ -118,22 +118,46 @@ def api_call(
     body: dict | None = None,
     expected_statuses: tuple[int, ...] = (200, 201),
 ) -> tuple[int, dict]:
-    """One real API call via curl inside the container; returns (status, parsed).
+    r"""One real API call via curl inside the container; returns (status, parsed).
 
-    Uses ``curl -sS -w '\\n%{http_code}'`` so HTTP error bodies stay visible in
+    Uses ``curl -sS -w '\n%{http_code}'`` so HTTP error bodies stay visible in
     assertion messages instead of being swallowed by an exit code alone.
     """
     if body is not None:
         result = _docker(
-            env, "exec", container, "curl", "-sS", "--max-time", "30",
-            "-X", method, "-H", "Content-Type: application/json",
-            "-d", json.dumps(body),
-            "-w", r"\n%{http_code}", f"{API_BASE}{path}", check=False,
+            env,
+            "exec",
+            container,
+            "curl",
+            "-sS",
+            "--max-time",
+            "30",
+            "-X",
+            method,
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            json.dumps(body),
+            "-w",
+            r"\n%{http_code}",
+            f"{API_BASE}{path}",
+            check=False,
         )
     else:
         result = _docker(
-            env, "exec", container, "curl", "-sS", "--max-time", "30",
-            "-X", method, "-w", r"\n%{http_code}", f"{API_BASE}{path}", check=False,
+            env,
+            "exec",
+            container,
+            "curl",
+            "-sS",
+            "--max-time",
+            "30",
+            "-X",
+            method,
+            "-w",
+            r"\n%{http_code}",
+            f"{API_BASE}{path}",
+            check=False,
         )
     if result.returncode != 0:
         raise AssertionError(
@@ -187,7 +211,7 @@ def ensure_image(env: dict[str, str], ref: str, arch: str) -> dict:
             f"AIO_RELEASE_ARCH={arch}; refusing to run against the wrong arch."
         )
     image_id = image.get("Id") or ""
-    assert image_id, f"image inspect returned no Id for {ref}: {image!r}"
+    assert image_id, f"image inspect returned no Id for {ref}: {image!r}"  # nosec B101
     return {
         "ref": ref,
         "id": image_id,
@@ -230,16 +254,31 @@ def release_stack(env: dict[str, str], scenario: str, arch: str) -> Iterator[dic
         # failed, so a cleanup lie can never hide behind a probe failure.
         leftovers: list[str] = []
         for container_name in (names["prev_container"], names["cand_container"]):
-            if _docker(env, "inspect", "-f", "{{.Id}}", container_name, check=False).returncode == 0:
+            if (
+                _docker(
+                    env, "inspect", "-f", "{{.Id}}", container_name, check=False
+                ).returncode
+                == 0
+            ):
                 leftovers.append(f"container:{container_name}")
-        for volume_name in (names["pg_volume"], names["redis_volume"], names["honcho_volume"]):
-            if _docker(env, "volume", "inspect", volume_name, check=False).returncode == 0:
+        for volume_name in (
+            names["pg_volume"],
+            names["redis_volume"],
+            names["honcho_volume"],
+        ):
+            if (
+                _docker(env, "volume", "inspect", volume_name, check=False).returncode
+                == 0
+            ):
                 leftovers.append(f"volume:{volume_name}")
-        if _docker(env, "network", "inspect", names["network"], check=False).returncode == 0:
+        if (
+            _docker(env, "network", "inspect", names["network"], check=False).returncode
+            == 0
+        ):
             leftovers.append(f"network:{names['network']}")
-        assert not leftovers, (
-            f"release stack cleanup left resources of run {names['base']} behind: {leftovers}"
-        )
+        assert (
+            not leftovers
+        ), f"release stack cleanup left resources of run {names['base']} behind: {leftovers}"  # nosec B101
 
 
 def _boot_container(
@@ -251,10 +290,15 @@ def _boot_container(
     arch: str,
 ) -> None:
     command = [
-        "docker", "run", "-d",
-        "--platform", f"linux/{arch}",
-        "--name", name,
-        "--network", network,
+        "docker",
+        "run",
+        "-d",
+        "--platform",
+        f"linux/{arch}",
+        "--name",
+        name,
+        "--network",
+        network,
         # No port publishing: the API is only reached via docker exec inside
         # the container, so nothing of this stack is reachable from the host.
     ]
@@ -270,17 +314,22 @@ def _assert_isolated(env: dict[str, str], name: str, network: str) -> None:
     """No published ports, and attached only to the per-run network."""
     bindings = _inspect(env, name, "{{json .HostConfig.PortBindings}}") or ""
     # "{}" and "null" are both representations of no published ports.
-    assert bindings.strip() in ("{}", "null"), (
-        f"{name} published ports to the host: {bindings}"
-    )
+    assert bindings.strip() in (
+        "{}",
+        "null",
+    ), f"{name} published ports to the host: {bindings}"  # nosec B101
     nets = _inspect(env, name, "{{json .NetworkSettings.Networks}}") or ""
     attached = json.loads(nets) if nets.strip() else {}
-    assert list(attached.keys()) == [network], (
+    assert list(attached.keys()) == [
+        network
+    ], (  # nosec B101
         f"{name} attached to networks {list(attached.keys())}, expected only {network}"
     )
 
 
-def _assert_mounts(env: dict[str, str], name: str, volumes: list[tuple[str, str]]) -> None:
+def _assert_mounts(
+    env: dict[str, str], name: str, volumes: list[tuple[str, str]]
+) -> None:
     """The container must carry exactly the intended appdata volume mounts."""
     raw = _inspect(env, name, "{{json .Mounts}}") or ""
     mounts = json.loads(raw)
@@ -290,7 +339,9 @@ def _assert_mounts(env: dict[str, str], name: str, volumes: list[tuple[str, str]
         if m.get("Type") == "volume"
     }
     expected = set(volumes)
-    assert seen == expected, (
+    assert (
+        seen == expected
+    ), (  # nosec B101
         f"{name} mounts {sorted(seen)}, expected exactly {sorted(expected)}"
     )
 
@@ -302,8 +353,20 @@ def _disk_message_count(env: dict[str, str], name: str) -> int:
     A missing messages table is a hard SQL error, not an empty result.
     """
     count_result = _docker(
-        env, "exec", name, "gosu", "postgres", "psql", "-XAt", "-v", "ON_ERROR_STOP=1",
-        "-d", "honcho", "-c", "select count(*) from public.messages", check=False,
+        env,
+        "exec",
+        name,
+        "gosu",
+        "postgres",
+        "psql",
+        "-XAt",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-d",
+        "honcho",
+        "-c",
+        "select count(*) from public.messages",
+        check=False,
     )
     if count_result.returncode != 0:
         raise AssertionError(
@@ -311,26 +374,34 @@ def _disk_message_count(env: dict[str, str], name: str) -> int:
         )
     raw = count_result.stdout.strip()
     if not raw.isdigit():
-        raise AssertionError(
-            f"psql count on {name} did not return an integer: {raw!r}"
-        )
+        raise AssertionError(f"psql count on {name} did not return an integer: {raw!r}")
     return int(raw)
 
 
-def wait_healthy(env: dict[str, str], name: str, timeout: int = HEALTH_TIMEOUT_SECONDS) -> None:
+def wait_healthy(
+    env: dict[str, str], name: str, timeout: int = HEALTH_TIMEOUT_SECONDS
+) -> None:
     """Poll /health inside the container until 200 or deadline."""
     deadline = time.time() + timeout
     last_error = ""
     while time.time() < deadline:
         _assert_running(env, name)
         result = _docker(
-            env, "exec", name,
-            "curl", "-fsS", "--max-time", "5", "http://127.0.0.1:8000/health",
+            env,
+            "exec",
+            name,
+            "curl",
+            "-fsS",
+            "--max-time",
+            "5",
+            "http://127.0.0.1:8000/health",
             check=False,
         )
         if result.returncode == 0:
             body = result.stdout.strip()
-            assert json.loads(body).get("status") == "ok", f"/health body: {body}"
+            assert (
+                json.loads(body).get("status") == "ok"
+            ), f"/health body: {body}"  # nosec B101
             return
         last_error = (result.stdout + result.stderr).strip()
         time.sleep(4)
@@ -371,21 +442,29 @@ def _post_message(
 ) -> str:
     """Write one real message into an existing session; returns its id."""
     _, payload = api_call(
-        env, container, "POST",
+        env,
+        container,
+        "POST",
         f"/v3/workspaces/{ws}/sessions/{sess}/messages",
         {"messages": [{"peer_id": peer, "content": content}]},
     )
     messages = payload if isinstance(payload, list) else payload.get("messages")
-    assert isinstance(messages, list) and messages, f"unexpected create response: {payload!r}"
+    assert (
+        isinstance(messages, list) and messages
+    ), f"unexpected create response: {payload!r}"  # nosec B101
     message = messages[0]
     assert_message_chain(
-        message, content=content, peer=peer, session=sess, workspace=ws,
+        message,
+        content=content,
+        peer=peer,
+        session=sess,
+        workspace=ws,
         context="created message",
     )
     message_id = message.get("id")
-    assert isinstance(message_id, str) and message_id, (
-        f"created message carries no id: {message!r}"
-    )
+    assert (
+        isinstance(message_id, str) and message_id
+    ), f"created message carries no id: {message!r}"  # nosec B101
     return message_id
 
 
@@ -396,13 +475,19 @@ def write_new_message(
     return _post_message(env, container, ws, sess, peer, content)
 
 
-def read_message(env: dict[str, str], container: str, ws: str, sess: str, message_id: str) -> dict:
+def read_message(
+    env: dict[str, str], container: str, ws: str, sess: str, message_id: str
+) -> dict:
     body = api_call(
-        env, container, "GET",
+        env,
+        container,
+        "GET",
         f"/v3/workspaces/{ws}/sessions/{sess}/messages/{message_id}",
         expected_statuses=(200,),
     )[1]
-    assert body.get("id") == message_id, (
+    assert (
+        body.get("id") == message_id
+    ), (  # nosec B101
         f"GET message returned id {body.get('id')!r}, expected {message_id!r}: {body!r}"
     )
     return body
@@ -422,26 +507,34 @@ def _replace_container(
         raise AssertionError(
             f"docker stop {prev} failed: {stop.stderr}\nLogs:\n{_container_logs(env, prev)}"
         )
-    assert _inspect(env, prev, "{{.State.Status}}") != "running"
+    assert _inspect(env, prev, "{{.State.Status}}") != "running"  # nosec B101
     rm = _docker(env, "rm", prev, check=False)
-    assert rm.returncode == 0, f"docker rm {prev} failed: {rm.stderr}"
+    assert rm.returncode == 0, f"docker rm {prev} failed: {rm.stderr}"  # nosec B101
     # The volumes survive the removal; that is the appdata handoff.
     for volume, _mount in volumes:
         inspect = _docker(env, "volume", "inspect", volume, check=False)
-        assert inspect.returncode == 0, f"Volume {volume} vanished after replace"
+        assert (
+            inspect.returncode == 0
+        ), f"Volume {volume} vanished after replace"  # nosec B101
 
-    _boot_container(env, names["cand_container"], image_ref, names["network"], volumes, arch)
+    _boot_container(
+        env, names["cand_container"], image_ref, names["network"], volumes, arch
+    )
     image_id = _inspect(env, names["cand_container"], "{{.Image}}")
-    assert image_id, f"candidate container {names['cand_container']} has no Image id"
+    assert (
+        image_id
+    ), f"candidate container {names['cand_container']} has no Image id"  # nosec B101
     return {"container_image_id": image_id}
 
 
 def _restart_container(env: dict[str, str], name: str) -> None:
     result = _docker(env, "restart", "--time", "30", name, check=False)
-    assert result.returncode == 0, (
+    assert (
+        result.returncode == 0
+    ), (  # nosec B101
         f"docker restart {name} failed: {(result.stdout + result.stderr)[-1000:]}"
     )
-    assert _inspect(env, name, "{{.State.Status}}") == "running"
+    assert _inspect(env, name, "{{.State.Status}}") == "running"  # nosec B101
 
 
 def _write_receipt(scenario: str, receipt: dict) -> Path:
@@ -493,9 +586,9 @@ def _run_release_probe(
     content_seed = f"release-quality-{scenario}-seed-{run_token}"
     content_after_replace = f"release-quality-{scenario}-replace-{run_token}"
     content_after_restart = f"release-quality-{scenario}-restart-{run_token}"
-    assert len({content_seed, content_after_replace, content_after_restart}) == 3, (
-        "seed and verification writes must be distinct message contents"
-    )
+    assert (
+        len({content_seed, content_after_replace, content_after_restart}) == 3
+    ), "seed and verification writes must be distinct message contents"  # nosec B101
 
     with release_stack(env, scenario, inputs.arch) as names:
         volumes = [
@@ -504,7 +597,14 @@ def _run_release_probe(
             (names["honcho_volume"], "/var/lib/honcho"),
         ]
 
-        _boot_container(env, names["prev_container"], previous_ref, names["network"], volumes, inputs.arch)
+        _boot_container(
+            env,
+            names["prev_container"],
+            previous_ref,
+            names["network"],
+            volumes,
+            inputs.arch,
+        )
         wait_healthy(env, names["prev_container"])
         _assert_isolated(env, names["prev_container"], names["network"])
         _assert_mounts(env, names["prev_container"], volumes)
@@ -518,83 +618,127 @@ def _run_release_probe(
             "seed_image_id": prev_image["id"],
             "disk_before_seed": _disk_message_count(env, names["prev_container"]),
         }
-        assert messages["disk_before_seed"] == 0, "fresh appdata must start empty"
-        message_id = seed_message(env, names["prev_container"], ws, peer, sess, content_seed)
-        messages["disk_after_seed"] = _disk_message_count(env, names["prev_container"])
-        assert messages["disk_after_seed"] == messages["disk_before_seed"] + 1, (
-            f"seed write did not reach disk: {messages}"
+        assert (
+            messages["disk_before_seed"] == 0
+        ), "fresh appdata must start empty"  # nosec B101
+        message_id = seed_message(
+            env, names["prev_container"], ws, peer, sess, content_seed
         )
+        messages["disk_after_seed"] = _disk_message_count(env, names["prev_container"])
+        assert (
+            messages["disk_after_seed"] == messages["disk_before_seed"] + 1
+        ), f"seed write did not reach disk: {messages}"  # nosec B101
 
-        replace_receipt = _replace_container(env, names, candidate_ref, volumes, inputs.arch)
+        replace_receipt = _replace_container(
+            env, names, candidate_ref, volumes, inputs.arch
+        )
         wait_healthy(env, names["cand_container"])
         _assert_isolated(env, names["cand_container"], names["network"])
         _assert_mounts(env, names["cand_container"], volumes)
 
         seeded_read = read_message(env, names["cand_container"], ws, sess, message_id)
         assert_message_chain(
-            seeded_read, content=content_seed, peer=peer, session=sess, workspace=ws,
+            seeded_read,
+            content=content_seed,
+            peer=peer,
+            session=sess,
+            workspace=ws,
             context=(
                 f"[{scenario}] message written on previous image {previous_ref} did "
                 f"not survive replacement with {candidate_ref}"
             ),
         )
-        messages["disk_after_replace"] = _disk_message_count(env, names["cand_container"])
-        assert messages["disk_after_replace"] == messages["disk_after_seed"], (
-            f"disk message count changed across replacement: {messages}"
+        messages["disk_after_replace"] = _disk_message_count(
+            env, names["cand_container"]
         )
+        assert (
+            messages["disk_after_replace"] == messages["disk_after_seed"]
+        ), f"disk message count changed across replacement: {messages}"  # nosec B101
 
         write_replace_id = write_new_message(
             env, names["cand_container"], ws, sess, peer, content_after_replace
         )
-        assert write_replace_id != message_id, "new write reused the seeded message id"
-        replace_read = read_message(env, names["cand_container"], ws, sess, write_replace_id)
+        assert (
+            write_replace_id != message_id
+        ), "new write reused the seeded message id"  # nosec B101
+        replace_read = read_message(
+            env, names["cand_container"], ws, sess, write_replace_id
+        )
         assert_message_chain(
-            replace_read, content=content_after_replace, peer=peer, session=sess,
-            workspace=ws, context=f"[{scenario}] new write read-back",
+            replace_read,
+            content=content_after_replace,
+            peer=peer,
+            session=sess,
+            workspace=ws,
+            context=f"[{scenario}] new write read-back",
         )
-        messages["disk_after_write_on_candidate"] = _disk_message_count(env, names["cand_container"])
-        assert messages["disk_after_write_on_candidate"] == messages["disk_after_replace"] + 1, (
-            f"post-replacement write did not reach disk: {messages}"
+        messages["disk_after_write_on_candidate"] = _disk_message_count(
+            env, names["cand_container"]
         )
+        assert (
+            messages["disk_after_write_on_candidate"]
+            == messages["disk_after_replace"] + 1
+        ), f"post-replacement write did not reach disk: {messages}"  # nosec B101
 
         _restart_container(env, names["cand_container"])
         wait_healthy(env, names["cand_container"])
         _assert_isolated(env, names["cand_container"], names["network"])
         _assert_mounts(env, names["cand_container"], volumes)
 
-        seeded_after_restart = read_message(env, names["cand_container"], ws, sess, message_id)
+        seeded_after_restart = read_message(
+            env, names["cand_container"], ws, sess, message_id
+        )
         assert_message_chain(
-            seeded_after_restart, content=content_seed, peer=peer, session=sess,
-            workspace=ws, context=f"[{scenario}] seeded message across restart",
+            seeded_after_restart,
+            content=content_seed,
+            peer=peer,
+            session=sess,
+            workspace=ws,
+            context=f"[{scenario}] seeded message across restart",
         )
         write_after_restart = read_message(
             env, names["cand_container"], ws, sess, write_replace_id
         )
         assert_message_chain(
-            write_after_restart, content=content_after_replace, peer=peer,
-            session=sess, workspace=ws,
+            write_after_restart,
+            content=content_after_replace,
+            peer=peer,
+            session=sess,
+            workspace=ws,
             context=f"[{scenario}] post-replacement write across restart",
         )
-        messages["disk_after_restart"] = _disk_message_count(env, names["cand_container"])
-        assert messages["disk_after_restart"] == messages["disk_after_write_on_candidate"], (
-            f"disk message count changed across restart: {messages}"
+        messages["disk_after_restart"] = _disk_message_count(
+            env, names["cand_container"]
         )
+        assert (
+            messages["disk_after_restart"] == messages["disk_after_write_on_candidate"]
+        ), f"disk message count changed across restart: {messages}"  # nosec B101
 
         write_restart_id = write_new_message(
             env, names["cand_container"], ws, sess, peer, content_after_restart
         )
-        assert write_restart_id not in (message_id, write_replace_id), (
-            "post-restart write reused a previous message id"
+        assert write_restart_id not in (
+            message_id,
+            write_replace_id,
+        ), "post-restart write reused a previous message id"  # nosec B101
+        restart_read = read_message(
+            env, names["cand_container"], ws, sess, write_restart_id
         )
-        restart_read = read_message(env, names["cand_container"], ws, sess, write_restart_id)
         assert_message_chain(
-            restart_read, content=content_after_restart, peer=peer, session=sess,
-            workspace=ws, context=f"[{scenario}] post-restart write read-back",
+            restart_read,
+            content=content_after_restart,
+            peer=peer,
+            session=sess,
+            workspace=ws,
+            context=f"[{scenario}] post-restart write read-back",
         )
-        messages["disk_after_post_restart_write"] = _disk_message_count(env, names["cand_container"])
-        assert messages["disk_after_post_restart_write"] == messages["disk_after_restart"] + 1, (
-            f"post-restart write did not reach disk: {messages}"
+        messages["disk_after_post_restart_write"] = _disk_message_count(
+            env, names["cand_container"]
         )
+        assert (
+            messages["disk_after_post_restart_write"]
+            == messages["disk_after_restart"] + 1
+        ), f"post-restart write did not reach disk: {messages}"  # nosec B101
 
     evidence = {
         "scenario": scenario,
@@ -621,9 +765,7 @@ def _run_release_probe(
             "after_restart": content_after_restart,
         },
         "disk_message_counts": {
-            key: value
-            for key, value in messages.items()
-            if key.startswith("disk_")
+            key: value for key, value in messages.items() if key.startswith("disk_")
         },
         "candidate_container_image_id": replace_receipt["container_image_id"],
     }
@@ -649,40 +791,47 @@ def docker_runtime() -> DockerSession:
             f"the verified isolated DinD or the hosted ARM64 opt-in.\n{info.stderr[-1500:]}"
         )
     identity = _docker(
-        env, "info", "--format", "{{.Name}}|{{.OperatingSystem}}|{{.Architecture}}",
+        env,
+        "info",
+        "--format",
+        "{{.Name}}|{{.OperatingSystem}}|{{.Architecture}}",
         check=False,
     )
-    assert identity.returncode == 0 and identity.stdout.strip(), (
+    assert (
+        identity.returncode == 0 and identity.stdout.strip()
+    ), (  # nosec B101
         f"docker info identity failed: {(identity.stdout + identity.stderr)[-500:]}"
     )
     name, operating_system, info_arch = identity.stdout.strip().split("|")
-    assert name.strip(), "docker info returned an empty engine name"
+    assert name.strip(), "docker info returned an empty engine name"  # nosec B101
     inputs = release_inputs()
     arch_map = {"amd64": "x86_64", "arm64": "aarch64"}
 
     if session.mode == SOCKET_DIND_TLS:
-        assert name == "Docker-in-Docker-DinD", (
-            f"unexpected daemon identity: {name!r} ({operating_system!r})"
-        )
+        assert (
+            name == "Docker-in-Docker-DinD"
+        ), f"unexpected daemon identity: {name!r} ({operating_system!r})"  # nosec B101
     else:
-        assert session.mode == SOCKET_HOST_DEFAULT
+        assert session.mode == SOCKET_HOST_DEFAULT  # nosec B101
         # Native hosted ARM64: engine is trusted by construction (ephemeral,
         # runner-scoped); pin its architecture, never its DinD-style name.
-        assert "DOCKER_HOST" not in env, (
+        assert "DOCKER_HOST" not in env, (  # nosec B101
             "the hosted mode must use the runner's default socket; the session "
             "env still carries a DOCKER_HOST override"
         )
-        assert env.get("AIO_RELEASE_NATIVE_DOCKER") == "1"
-        assert inputs.arch == "arm64", (
-            f"hosted mode is ARM64-only; AIO_RELEASE_ARCH={inputs.arch!r}"
-        )
-    assert info_arch == arch_map[inputs.arch], (
+        assert env.get("AIO_RELEASE_NATIVE_DOCKER") == "1"  # nosec B101
+        assert (
+            inputs.arch == "arm64"
+        ), f"hosted mode is ARM64-only; AIO_RELEASE_ARCH={inputs.arch!r}"  # nosec B101
+    assert info_arch == arch_map[inputs.arch], (  # nosec B101
         f"daemon architecture mismatch: info reported {info_arch!r}, "
         f"expected {arch_map[inputs.arch]!r} for AIO_RELEASE_ARCH={inputs.arch}"
     )
     server_arch = _docker(env, "version", "-f", "{{.Server.Arch}}", check=False)
-    assert server_arch.returncode == 0, f"docker version failed: {server_arch.stderr}"
-    assert server_arch.stdout.strip() == inputs.arch, (
+    assert (
+        server_arch.returncode == 0
+    ), f"docker version failed: {server_arch.stderr}"  # nosec B101
+    assert server_arch.stdout.strip() == inputs.arch, (  # nosec B101
         f"docker version reports {{.Server.Arch}}={server_arch.stdout.strip()!r}, "
         f"expected {inputs.arch!r}"
     )
@@ -752,19 +901,25 @@ def test_docker_env_rejects_host_default_socket(
 def test_docker_engine_verified(docker_runtime: DockerSession) -> None:
     """The approved engine is actually reachable before the probes run."""
     if docker_runtime.mode == SOCKET_DIND_TLS:
-        identity = _docker(docker_runtime.env, "info", "--format", "{{.Name}}|{{.Architecture}}")
+        identity = _docker(
+            docker_runtime.env, "info", "--format", "{{.Name}}|{{.Architecture}}"
+        )
         name, arch = identity.stdout.strip().split("|")
-        assert name == "Docker-in-Docker-DinD", f"unexpected daemon name: {name!r}"
-        assert arch == {"amd64": "x86_64", "arm64": "aarch64"}[release_inputs().arch], (
-            f"daemon arch {arch!r} does not match AIO_RELEASE_ARCH={release_inputs().arch}"
-        )  # nosec B101
+        assert (
+            name == "Docker-in-Docker-DinD"
+        ), f"unexpected daemon name: {name!r}"  # nosec B101
+        assert (
+            arch == {"amd64": "x86_64", "arm64": "aarch64"}[release_inputs().arch]
+        ), f"daemon arch {arch!r} does not match AIO_RELEASE_ARCH={release_inputs().arch}"  # nosec B101
     else:
         # Hosted ARM64: markers + opt-in re-checked where they will be used.
-        assert release_inputs().arch == "arm64"
+        assert release_inputs().arch == "arm64"  # nosec B101
         assert "DOCKER_HOST" not in docker_runtime.env  # nosec B101 - hosted truth
-        assert docker_runtime.env["AIO_RELEASE_NATIVE_DOCKER"] == "1"
-        assert docker_runtime.env["GITHUB_ACTIONS"] == "true"  # nosec B105 - marker
-        assert docker_runtime.env["RUNNER_ENVIRONMENT"] == "github-hosted"  # nosec B105 - marker
+        assert docker_runtime.env["AIO_RELEASE_NATIVE_DOCKER"] == "1"  # nosec B101
+        assert docker_runtime.env["GITHUB_ACTIONS"] == "true"  # nosec B101 - marker
+        assert (
+            docker_runtime.env["RUNNER_ENVIRONMENT"] == "github-hosted"
+        )  # nosec B101 - marker
 
 
 # ── Scenario 1: same-digest smoke — replacement image == seeded image ─────
@@ -788,8 +943,8 @@ def test_same_digest_smoke(docker_runtime: DockerSession) -> None:
     )
     candidate_digest = ReleaseInputs.digest(evidence["candidate_ref"])
     previous_digest = ReleaseInputs.digest(evidence["previous_ref"])
-    assert candidate_digest == previous_digest
-    assert evidence["previous_image_id"] == evidence["candidate_image_id"]
+    assert candidate_digest == previous_digest  # nosec B101
+    assert evidence["previous_image_id"] == evidence["candidate_image_id"]  # nosec B101
     print(
         f"\n[release] same-digest smoke OK on digest {candidate_digest[:16]}… "
         f"(messages {evidence['message_id']}, {evidence['write_after_replace_id']}, "
@@ -826,17 +981,17 @@ def test_two_version_upgrade(docker_runtime: DockerSession) -> None:
         scenario="two_version_upgrade",
         endpoint_mode=docker_runtime.mode,
     )
-    assert evidence["candidate_ref"] == inputs.candidate_ref
-    assert evidence["previous_image_id"] != evidence["candidate_image_id"], (
-        "distinct digests must not collapse to the same image id"
-    )
+    assert evidence["candidate_ref"] == inputs.candidate_ref  # nosec B101
+    assert (
+        evidence["previous_image_id"] != evidence["candidate_image_id"]
+    ), "distinct digests must not collapse to the same image id"  # nosec B101
     counts = evidence["disk_message_counts"]
-    assert counts["disk_after_replace"] == counts["disk_after_seed"], (
-        f"seeded row lost across replacement: {counts}"
-    )
-    assert counts["disk_after_post_restart_write"] == counts["disk_before_seed"] + 3, (
-        f"expected exactly seed + 2 new writes on disk: {counts}"
-    )
+    assert (
+        counts["disk_after_replace"] == counts["disk_after_seed"]
+    ), f"seeded row lost across replacement: {counts}"  # nosec B101
+    assert (
+        counts["disk_after_post_restart_write"] == counts["disk_before_seed"] + 3
+    ), f"expected exactly seed + 2 new writes on disk: {counts}"  # nosec B101
     print(
         f"\n[release] two-version upgrade OK: {previous_digest[:16]}… → "
         f"{candidate_digest[:16]}… (seeded {evidence['message_id']} + new writes "
