@@ -62,6 +62,7 @@ from tests.release.conftest import (
     docker_release_env,
     docker_session,
     release_inputs,
+    suite_git_head,
 )
 
 pytestmark = pytest.mark.integration
@@ -597,6 +598,7 @@ def _run_release_probe(
 
     evidence = {
         "scenario": scenario,
+        "suite_git_head": suite_git_head(),
         "docker_endpoint_mode": endpoint_mode,
         "classification": (
             "harness-sanity-same-digest"

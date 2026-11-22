@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess  # nosec B404
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -293,3 +294,29 @@ def docker_session() -> DockerSession:
 def docker_release_env() -> dict[str, str]:
     """Backward-compatible view of :func:`docker_session` (env only)."""
     return docker_session().env
+
+
+def suite_git_head() -> str | None:
+    """The exact commit this test suite runs from, for receipt provenance.
+
+    The hosted qualification workflow exports ``AIO_SUITE_GIT_HEAD`` with the
+    reviewed test ref it checked out, and the fleet receipts gate refuses any
+    receipt whose ``suite_git_head`` does not match that ref. Locally the
+    value comes from the enclosing git worktree. A copy-dir run without git
+    records ``None``; such receipts then fail the hosted gate, which is the
+    intended fail-closed behavior.
+    """
+    pinned = os.environ.get("AIO_SUITE_GIT_HEAD", "").strip()
+    if pinned:
+        return pinned
+    try:
+        head = subprocess.run(  # nosec B603
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return head.stdout.strip() or None
