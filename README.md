@@ -80,6 +80,13 @@ No `docker exec` required.
 - No MCP server — Hermes uses the native Honcho memory provider
 - Does not replace a live `/docker-compose/honcho` stack unless you do that yourself
 
+## Companion Containers (Honcho Dashboard, DBeaver)
+
+By default, PostgreSQL stays on loopback and Honcho API logs stream only to stdout. If you deploy companion services like [Honcho Dashboard](https://github.com/outpoints/honcho-dashboard):
+
+1. **Database Access:** Set `POSTGRES_ALLOW_REMOTE=true`. This permits SCRAM-authenticated connections from companion containers on the same Docker network (or LAN if port `5432` is exposed).
+2. **Live Log Streaming:** Set `HONCHO_LOG_FILE=/var/log/honcho/honcho.log` and mount `/var/log/honcho` to a host directory (e.g. `/mnt/user/appdata/honcho-aio/logs`). `honcho-api` will stream output to both Docker logs and the file.
+
 ## Persistence
 
 Back up Postgres, Redis, and Honcho state under `/mnt/user/appdata/honcho-aio/` if you care about the instance.
